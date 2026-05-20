@@ -1,96 +1,101 @@
-# =========================
-# Database / SQLite
-# =========================
-*.db
-*.db-*
-*.sqlite
-*.sqlite3
-*.db-shm
-*.db-wal
-*.sqlite-shm
-*.sqlite-wal
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
 
-data/*.db
-data/*.db-*
-backend/data/*.db
-backend/data/*.db-*
-server/data/*.db
-server/data/*.db-*
+# IDE
+.idea/
+.vscode/
+*.iml
 
-# =========================
-# User uploads / runtime files
-# =========================
-uploads/
-backend/uploads/
-server/uploads/
-
-# 如果只想保留目录结构，可以手动创建并提交 .gitkeep：
-# !uploads/.gitkeep
-# !backend/uploads/.gitkeep
-# !server/uploads/.gitkeep
-
-# =========================
-# Go cache / build output
-# =========================
-.gocache/
-.gomodcache/
-*.exe
-*.test
-*.out
-coverage.out
-bin/
-build/
-dist/
-
-# Go workspace files usually should not be committed in this project
-# unless you intentionally use a multi-module workspace.
-go.work
-go.work.sum
-
-# =========================
-# Frontend / Node / Vite
-# =========================
-node_modules/
-frontend/node_modules/
-
-.vite/
-frontend/.vite/
-
-frontend/dist/
-frontend/build/
-dist/
-build/
-
+# Logs
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# =========================
-# Environment / secrets
-# =========================
+# Env
 .env
 .env.*
 !.env.example
 
-# =========================
-# IDE / Editor
-# =========================
-.vscode/
-.idea/
-*.iml
-
-# =========================
-# Logs / temporary files
-# =========================
-logs/
-*.log
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+build/
 tmp/
 temp/
-.cache/
 
-# =========================
-# OS files
-# =========================
-.DS_Store
-Thumbs.db
+# Go cache / workspace
+.gocache/
+.gomodcache/
+go.work
+go.work.sum
+
+# Backend data
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+
+# Upload files
+uploads/
+backend/uploads/
+internal/uploads/
+
+# Frontend dependencies
+node_modules/
+frontend/node_modules/
+
+# Frontend build outputs
+dist/
+frontend/dist/
+frontend/.vite/
+frontend/build/
+
+# Electron build outputs
+release/
+out/
+dist-electron/
+frontend/release/
+frontend/out/
+frontend/dist-electron/
+
+# Electron builder cache / generated files
+*.blockmap
+*.asar
+*.asar.unpacked/
+builder-debug.yml
+builder-effective-config.yaml
+
+# TypeScript / tooling cache
+*.tsbuildinfo
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Test / coverage
+coverage/
+frontend/coverage/
+
+# Local runtime files
+*.pid
+*.seed
+*.local
+
+# Package manager
+.pnpm-store/
+.yarn/
+.yarn-cache/
+.npm-cache/
