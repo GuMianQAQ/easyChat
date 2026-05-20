@@ -46,6 +46,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "electron/assets/tray.ico",
       "target": [
         "portable"
       ]

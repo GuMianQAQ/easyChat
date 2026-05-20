@@ -35,7 +35,6 @@ function LeftDock({
   return (
     <aside className="left-dock">
       <div className="left-dock-top">
-        <div className="left-dock-brand">MyChat</div>
         <Avatar
           name={currentUsername || "访客"}
           src={currentAvatar}

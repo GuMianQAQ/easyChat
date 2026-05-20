@@ -1,14 +1,18 @@
 .login-page {
   min-height: 100vh;
   display: flex;
+  width: 100%;
+  overflow: hidden;
   background: #e5dfeb;
 }
 
 .login-shell {
   flex: 1;
   display: grid;
+  width: 100%;
   grid-template-columns: 1.06fr 0.94fr;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .login-left {
@@ -22,6 +26,8 @@
 }
 
 .login-brand {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -41,12 +47,15 @@
 .characters-scene {
   position: relative;
   width: 550px;
-  height: 400px;
+  max-width: 100%;
+  height: 440px;
   margin: auto;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .login-links {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   gap: 18px;
   align-self: flex-start;
@@ -60,6 +69,7 @@
 .login-right {
   display: grid;
   place-items: center;
+  min-width: 0;
   background: #ffffff;
   padding: 40px;
 }
