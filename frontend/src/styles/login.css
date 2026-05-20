@@ -136,6 +136,30 @@
   box-shadow: 0 0 0 4px rgba(148, 120, 255, 0.12);
 }
 
+.login-password-strength {
+  margin: -2px 0 0;
+  color: #7f768b;
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 16px;
+}
+
+.login-password-strength-太短 {
+  color: #c44f4f;
+}
+
+.login-password-strength-弱 {
+  color: #d28b2c;
+}
+
+.login-password-strength-中 {
+  color: #4f7fd7;
+}
+
+.login-password-strength-强 {
+  color: #2d8a57;
+}
+
 .login-check {
   display: inline-flex;
   align-items: center;

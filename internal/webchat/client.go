@@ -179,6 +179,15 @@ func (c *Client) readPump() {
 				c.hub.BroadcastPrivate(wireMessage, c.UserID, wireMessage.TargetUserID)
 				continue
 			}
+			if wireMessage.MessageScope == ScopeGroup {
+				memberIDs, err := c.store.ConversationMemberIDs(c.UserID, wireMessage.ConversationID)
+				if err != nil {
+					c.sendError(err.Error())
+					continue
+				}
+				c.hub.BroadcastPrivate(wireMessage, memberIDs...)
+				continue
+			}
 			c.hub.Broadcast(wireMessage)
 		case MessageTypeRevoke:
 			result, err := c.store.RevokeMessage(
@@ -193,6 +202,15 @@ func (c *Client) readPump() {
 			wireMessage := payloadToWire(result.Message)
 			if wireMessage.MessageScope == ScopePrivate && result.TargetUserID != "" {
 				c.hub.BroadcastPrivate(wireMessage, c.UserID, result.TargetUserID)
+				continue
+			}
+			if wireMessage.MessageScope == ScopeGroup {
+				memberIDs, err := c.store.ConversationMemberIDs(c.UserID, wireMessage.ConversationID)
+				if err != nil {
+					c.sendError(err.Error())
+					continue
+				}
+				c.hub.BroadcastPrivate(wireMessage, memberIDs...)
 				continue
 			}
 			c.hub.Broadcast(wireMessage)

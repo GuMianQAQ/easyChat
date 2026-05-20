@@ -11,6 +11,9 @@ function summarizeQuote(message: ChatMessage) {
   if (message.quote.messageType === "image") {
     return "[图片]";
   }
+  if (message.quote.messageType === "file") {
+    return "[文件]";
+  }
   return message.quote.content.length > 40
     ? `${message.quote.content.slice(0, 40)}…`
     : message.quote.content;

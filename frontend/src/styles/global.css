@@ -179,6 +179,10 @@ textarea {
   display: inline-flex;
 }
 
+.avatar-button {
+  cursor: pointer;
+}
+
 .icon-button {
   position: relative;
   width: 42px;

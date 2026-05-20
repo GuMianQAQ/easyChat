@@ -9,6 +9,7 @@ interface UserProfileCardProps {
   onOpenSettings?: () => void;
   onOpenChat?: (profile: UserProfile) => void;
   onSendRequest?: (profile: UserProfile) => void;
+  onOpenAvatarPreview?: (src: string) => void;
 }
 
 function UserProfileCard({
@@ -18,6 +19,7 @@ function UserProfileCard({
   onOpenSettings,
   onOpenChat,
   onSendRequest,
+  onOpenAvatarPreview,
 }: UserProfileCardProps) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -87,11 +89,22 @@ function UserProfileCard({
       }}
     >
       <div className="profile-card-header">
-        <Avatar name={profile.nickname} src={profile.avatar} size="lg" />
+        <Avatar
+          name={profile.nickname}
+          src={profile.avatar}
+          size="lg"
+          onClick={() => {
+            if (profile.avatar) {
+              onOpenAvatarPreview?.(profile.avatar);
+            }
+          }}
+          title={profile.avatar ? "查看大图" : undefined}
+        />
         <div className="profile-card-copy">
           <strong>{profile.nickname}</strong>
           <span>{profile.username}</span>
           {profile.region ? <em>{profile.region}</em> : null}
+          {profile.signature ? <em>{profile.signature}</em> : null}
         </div>
       </div>
       <div className="profile-card-actions">

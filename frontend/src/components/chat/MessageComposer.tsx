@@ -7,11 +7,14 @@ import QuotePreview from "./QuotePreview";
 
 interface MessageComposerProps {
   activeConversationId: string;
+  content: string;
   disabled: boolean;
   disabledReason?: string;
   enterToSend: boolean;
+  clearAfterSend: boolean;
   quote?: MessageQuote | null;
   onClearQuote: () => void;
+  onContentChange: (value: string) => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
   onCaptureScreen: (quote?: MessageQuote | null) => Promise<boolean>;
@@ -20,17 +23,19 @@ interface MessageComposerProps {
 
 function MessageComposer({
   activeConversationId,
+  content,
   disabled,
   disabledReason = "",
   enterToSend,
+  clearAfterSend,
   quote,
   onClearQuote,
+  onContentChange,
   onSendText,
   onSendImage,
   onCaptureScreen,
   onNotice,
 }: MessageComposerProps) {
-  const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
@@ -42,7 +47,9 @@ function MessageComposer({
       return;
     }
     if (onSendText(trimmed, quote)) {
-      setContent("");
+      if (clearAfterSend) {
+        onContentChange("");
+      }
       onClearQuote();
     }
   };
@@ -63,7 +70,7 @@ function MessageComposer({
     const { start, end } = selectionRef.current;
     const nextValue = `${content.slice(0, start)}${emoji}${content.slice(end)}`;
     const nextCursor = start + emoji.length;
-    setContent(nextValue);
+    onContentChange(nextValue);
     setEmojiOpen(true);
     requestAnimationFrame(() => {
       textarea?.focus();
@@ -158,7 +165,7 @@ function MessageComposer({
           disabled={disabled}
           placeholder={disabled ? disabledReason || "连接后才能发送消息" : "输入消息"}
           onChange={(event) => {
-            setContent(event.target.value);
+            onContentChange(event.target.value);
             syncSelection();
           }}
           onSelect={syncSelection}

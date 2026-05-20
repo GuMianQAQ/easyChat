@@ -17,6 +17,7 @@ interface LeftDockProps {
   activeDock: DockView;
   chatUnreadCount: number;
   onDockChange: (view: DockView) => void;
+  onOpenCurrentProfile: (x: number, y: number) => void;
   onDisconnect: () => void;
   onLogout: () => void;
 }
@@ -27,13 +28,25 @@ function LeftDock({
   activeDock,
   chatUnreadCount,
   onDockChange,
+  onOpenCurrentProfile,
   onDisconnect,
   onLogout,
 }: LeftDockProps) {
   return (
     <aside className="left-dock">
       <div className="left-dock-top">
-        <Avatar name={currentUsername || "访客"} src={currentAvatar} size="lg" tone="active" />
+        <div className="left-dock-brand">MyChat</div>
+        <Avatar
+          name={currentUsername || "访客"}
+          src={currentAvatar}
+          size="lg"
+          tone="active"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            onOpenCurrentProfile(rect.right + 12, rect.top);
+          }}
+          title="查看资料"
+        />
         <div className="left-dock-nav">
           <IconButton
             icon={MessageSquareMore}

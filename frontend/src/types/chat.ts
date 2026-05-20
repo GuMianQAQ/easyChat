@@ -1,7 +1,7 @@
 export type MessageType = "chat" | "system" | "users" | "error" | "revoke";
-export type ChatMessageType = "text" | "image";
+export type ChatMessageType = "text" | "image" | "file";
 export type MessageStatus = "sending" | "sent" | "failed";
-export type MessageScope = "public" | "private" | "system";
+export type MessageScope = "private" | "group" | "system";
 
 export type ConnectionStatus =
   | "disconnected"
@@ -12,7 +12,7 @@ export type ConnectionStatus =
 export type DockView = "chat" | "contacts" | "favorites" | "files" | "settings";
 export type ThemeMode = "light" | "dark" | "system";
 export type ContactPermission = "chat" | "limited";
-export type ContactSource = "self" | "room" | "recent" | "system" | "manual";
+export type ContactSource = "self" | "group" | "recent" | "system" | "manual";
 export type AuthMode = "login" | "register";
 export type FriendRequestStatus = "none" | "pending" | "received" | "accepted";
 
@@ -48,7 +48,7 @@ export interface ServerMessage {
 export interface ClientChatPayload {
   id: string;
   conversationId: string;
-  messageScope: "public" | "private";
+  messageScope: "private" | "group";
   type: "chat";
   messageType: ChatMessageType;
   targetUserId?: string;
@@ -61,7 +61,7 @@ export interface ClientChatPayload {
 export interface ClientRevokePayload {
   id: string;
   conversationId: string;
-  messageScope: "public" | "private";
+  messageScope: "private" | "group";
   targetUserId?: string;
   type: "revoke";
 }
@@ -90,7 +90,7 @@ export interface ChatMessage {
 
 export interface Conversation {
   id: string;
-  type: "public" | "private" | "system";
+  type: "private" | "group" | "system";
   title: string;
   avatar?: string;
   lastMessage?: string;
@@ -99,6 +99,9 @@ export interface Conversation {
   unreadCount: number;
   muted?: boolean;
   pinned?: boolean;
+  announcement?: string;
+  memberCount?: number;
+  createdBy?: string;
   targetUserId?: string;
   targetUsername?: string;
   targetNickname?: string;
@@ -108,7 +111,7 @@ export interface Conversation {
 
 export interface ConversationPayload {
   id: string;
-  type: "public" | "private" | "system";
+  type: "private" | "group" | "system";
   name: string;
   avatar: string;
   lastMessage: string;
@@ -117,6 +120,9 @@ export interface ConversationPayload {
   unreadCount: number;
   pinned: boolean;
   muted: boolean;
+  announcement?: string;
+  memberCount?: number;
+  createdBy?: string;
   targetUserId?: string;
   targetUsername?: string;
   targetNickname?: string;
@@ -124,11 +130,36 @@ export interface ConversationPayload {
   targetName?: string;
 }
 
+export interface GroupMemberItem {
+  userId: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+  role: "owner" | "member";
+  groupNickname: string;
+}
+
+export interface GroupConversationPayload {
+  id: string;
+  type: "group";
+  name: string;
+  avatar: string;
+  announcement: string;
+  myNickname: string;
+  isMuted: boolean;
+  memberCount: number;
+  members: GroupMemberItem[];
+}
+
 export interface MessagePagePayload {
   items: ServerMessage[];
   page: number;
   pageSize: number;
   hasMore: boolean;
+}
+
+export interface MessageAroundPayload extends MessagePagePayload {
+  anchorMessageId: string;
 }
 
 export interface CurrentUser {
@@ -282,6 +313,18 @@ export interface FileRecord {
   lastModified: number;
   selectedAt: string;
   previewUrl?: string;
+}
+
+export interface UploadedFileItem {
+  id: string;
+  userId: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  fileKind: string;
+  messageCreatedAt: string;
+  createdAt: string;
 }
 
 export interface UserSettings {

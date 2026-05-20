@@ -1,9 +1,11 @@
+import type { MouseEventHandler } from "react";
+
 interface AvatarProps {
   name: string;
   src?: string;
   size?: "sm" | "md" | "lg" | "xl";
   tone?: "default" | "active" | "soft";
-  onClick?: () => void;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   title?: string;
 }
 

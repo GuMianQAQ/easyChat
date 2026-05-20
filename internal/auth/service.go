@@ -56,12 +56,13 @@ type AuthResponse struct {
 }
 
 type RegisterRequest struct {
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	Nickname    string `json:"nickname"`
-	Avatar      string `json:"avatar"`
-	CaptchaID   string `json:"captchaId"`
-	CaptchaCode string `json:"captchaCode"`
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirmPassword"`
+	Nickname        string `json:"nickname"`
+	Avatar          string `json:"avatar"`
+	CaptchaID       string `json:"captchaId"`
+	CaptchaCode     string `json:"captchaCode"`
 }
 
 type LoginRequest struct {
@@ -75,6 +76,12 @@ type UpdateProfileRequest struct {
 	Gender    *string `json:"gender"`
 	Region    *string `json:"region"`
 	Signature *string `json:"signature"`
+}
+
+type ChangePasswordRequest struct {
+	OldPassword     string `json:"oldPassword"`
+	NewPassword     string `json:"newPassword"`
+	ConfirmPassword string `json:"confirmPassword"`
 }
 
 type Service struct {
@@ -120,12 +127,15 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 	if err := validatePassword(req.Password); err != nil {
 		return AuthResponse{}, err
 	}
+	if confirmPassword := strings.TrimSpace(req.ConfirmPassword); confirmPassword != "" && req.Password != confirmPassword {
+		return AuthResponse{}, errors.New("两次输入的密码不一致")
+	}
 	nickname, err := normalizeNickname(req.Nickname)
 	if err != nil {
 		return AuthResponse{}, err
 	}
 	if strings.TrimSpace(req.CaptchaID) == "" || strings.TrimSpace(req.CaptchaCode) == "" {
-		return AuthResponse{}, errors.New("请输入验证码")
+		return AuthResponse{}, errors.New("璇疯緭鍏ラ獙璇佺爜")
 	}
 	if !s.captchas.Verify(req.CaptchaID, req.CaptchaCode) {
 		return AuthResponse{}, errors.New("验证码错误")
@@ -246,6 +256,53 @@ func (s *Service) UpdateProfile(token string, req UpdateProfileRequest) (PublicU
 	return publicUser(user), nil
 }
 
+func (s *Service) ChangePassword(token string, req ChangePasswordRequest) error {
+	claims, err := s.verifyToken(strings.TrimSpace(token))
+	if err != nil {
+		return err
+	}
+
+	oldPassword := strings.TrimSpace(req.OldPassword)
+	newPassword := strings.TrimSpace(req.NewPassword)
+	confirmPassword := strings.TrimSpace(req.ConfirmPassword)
+	if oldPassword == "" {
+		return errors.New("请输入旧密码")
+	}
+	if newPassword == "" {
+		return errors.New("请输入新密码")
+	}
+	if confirmPassword == "" {
+		return errors.New("请输入确认密码")
+	}
+	if newPassword != confirmPassword {
+		return errors.New("两次输入的新密码不一致")
+	}
+	if utf8.RuneCountInString(newPassword) < 6 || utf8.RuneCountInString(newPassword) > 32 {
+		return errors.New("密码长度需为 6-32 位")
+	}
+	if oldPassword == newPassword {
+		return errors.New("新密码不能和旧密码一样")
+	}
+
+	var user User
+	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
+		return errors.New("登录已过期，请重新登录")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
+		return errors.New("旧密码错误")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user.PasswordHash = string(hash)
+	if err := s.db.Save(&user).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) Close() error {
 	sqlDB, err := s.db.DB()
 	if err != nil {
@@ -352,7 +409,7 @@ func validatePassword(password string) error {
 func normalizeNickname(nickname string) (string, error) {
 	trimmed := strings.TrimSpace(nickname)
 	if trimmed == "" {
-		return "", errors.New("昵称不能为空")
+		return "", errors.New("鏄电О涓嶈兘涓虹┖")
 	}
 	if count := utf8.RuneCountInString(trimmed); count < 1 || count > 20 {
 		return "", errors.New("昵称最多 20 个字符")
@@ -367,7 +424,7 @@ func normalizeGender(gender string) (string, error) {
 	case "male", "female":
 		return strings.TrimSpace(gender), nil
 	default:
-		return "", errors.New("性别参数无效")
+		return "", errors.New("鎬у埆鍙傛暟鏃犳晥")
 	}
 }
 

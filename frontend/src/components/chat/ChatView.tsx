@@ -1,10 +1,11 @@
-import { Bell } from "lucide-react";
+import { Bell, MessageCircleMore } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import type {
   ChatMessage,
   ConnectionStatus,
   Conversation,
+  GroupConversationPayload,
   MessageQuote,
   NotificationItem,
 } from "../../types/chat";
@@ -24,11 +25,14 @@ interface ChatMainProps {
   hasMore: boolean;
   loadingMore: boolean;
   notifications: NotificationItem[];
-  onlineCount: number;
+  groupConversation: GroupConversationPayload | null;
   favoriteIds: Set<string>;
   jumpToMessageId?: string;
   enterToSend: boolean;
+  clearAfterSend: boolean;
   composerDisabledReason?: string;
+  draftContent: string;
+  onDraftChange: (value: string) => void;
   onReconnect: () => void;
   onDisconnect: () => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
@@ -50,6 +54,15 @@ interface ChatMainProps {
   onToggleConversationPinned: (next: boolean) => void;
   onToggleConversationMuted: (next: boolean) => void;
   onClearConversation: () => void;
+  onUpdateGroupConversation: (
+    conversationId: string,
+    patch: {
+      name?: string;
+      announcement?: string;
+      myNickname?: string;
+      isMuted?: boolean;
+    },
+  ) => Promise<GroupConversationPayload | null>;
 }
 
 function NotificationPanel({ notifications }: { notifications: NotificationItem[] }) {
@@ -85,11 +98,14 @@ function ChatMain({
   hasMore,
   loadingMore,
   notifications,
-  onlineCount,
+  groupConversation,
   favoriteIds,
   jumpToMessageId: externalJumpToMessageId = "",
   enterToSend,
+  clearAfterSend,
   composerDisabledReason = "",
+  draftContent,
+  onDraftChange,
   onReconnect,
   onDisconnect,
   onSendText,
@@ -108,6 +124,7 @@ function ChatMain({
   onToggleConversationPinned,
   onToggleConversationMuted,
   onClearConversation,
+  onUpdateGroupConversation,
 }: ChatMainProps) {
   const [previewImage, setPreviewImage] = useState("");
   const [quote, setQuote] = useState<MessageQuote | null>(null);
@@ -136,6 +153,14 @@ function ChatMain({
         </header>
         <NotificationPanel notifications={notifications} />
       </>
+    );
+  }
+
+  if (!activeConversation.id) {
+    return (
+      <div className="chat-empty-screen">
+        <EmptyState icon={MessageCircleMore} title="暂无会话" description="从左侧选择一个私聊或群聊开始聊天" />
+      </div>
     );
   }
 
@@ -180,7 +205,6 @@ function ChatMain({
       <div className="chat-room-main">
         <ChatHeader
           conversation={activeConversation}
-          onlineCount={onlineCount}
           status={status}
           menuOpen={menuOpen}
           onDisconnect={onDisconnect}
@@ -219,11 +243,14 @@ function ChatMain({
         />
         <MessageComposer
           activeConversationId={activeConversation.id}
+          content={draftContent}
           disabled={status !== "connected" || Boolean(composerDisabledReason)}
           disabledReason={composerDisabledReason}
           enterToSend={enterToSend}
+          clearAfterSend={clearAfterSend}
           quote={quote}
           onClearQuote={() => setQuote(null)}
+          onContentChange={onDraftChange}
           onSendText={onSendText}
           onSendImage={onSendImage}
           onCaptureScreen={onCaptureScreen}
@@ -235,18 +262,16 @@ function ChatMain({
         <ConversationDetailPanel
           conversation={activeConversation}
           messages={messages}
+          groupConversation={groupConversation}
           onJumpToMessage={setJumpToMessageId}
           onToggleMuted={onToggleConversationMuted}
           onTogglePinned={onToggleConversationPinned}
           onClearMessages={onClearConversation}
+          onUpdateGroupConversation={onUpdateGroupConversation}
         />
       ) : null}
 
-      <ImagePreviewModal
-        open={Boolean(previewImage)}
-        src={previewImage}
-        onClose={() => setPreviewImage("")}
-      />
+      <ImagePreviewModal open={Boolean(previewImage)} src={previewImage} onClose={() => setPreviewImage("")} />
       {dragging ? <div className="drag-overlay">释放发送图片</div> : null}
     </div>
   );

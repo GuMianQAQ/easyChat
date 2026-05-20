@@ -45,13 +45,34 @@ function LoginPage({
     ? draft.login.password.length
     : draft.register.captchaCode.trim().length || draft.register.password.length;
 
+  const getPasswordStrength = (password: string) => {
+    const value = password.trim();
+    if (value.length < 6) {
+      return "太短";
+    }
+    let score = 0;
+    if (/[a-z]/.test(value)) score += 1;
+    if (/[A-Z]/.test(value)) score += 1;
+    if (/\d/.test(value)) score += 1;
+    if (/[^A-Za-z0-9]/.test(value)) score += 1;
+    if (value.length >= 10 && score >= 3) {
+      return "强";
+    }
+    if (score >= 3) {
+      return "中";
+    }
+    return "弱";
+  };
+
+  const passwordStrength = isLogin ? "" : getPasswordStrength(draft.register.password);
+
   return (
     <main className="login-page">
       <section className="login-shell">
         <div className="login-left">
           <div className="login-brand">
             <span className="login-brand-mark" />
-            <span>Go 简易聊天室</span>
+            <span>MyChat</span>
           </div>
           <AnimatedCharacters
             nicknameFocused={primaryFocused}
@@ -173,6 +194,7 @@ function LoginPage({
                     }
                   />
                 </label>
+                <p className={passwordStrength ? "login-password-strength login-password-strength-" + passwordStrength.toLowerCase() : "login-password-strength"}>{passwordStrength}</p>
 
                 <label className="login-field">
                   <span>确认密码</span>

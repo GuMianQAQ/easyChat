@@ -17,8 +17,8 @@ const (
 	MessageTypeError  = "error"
 	MessageTypeRevoke = "revoke"
 
-	ScopePublic  = "public"
 	ScopePrivate = "private"
+	ScopeGroup   = "group"
 	ScopeSystem  = "system"
 
 	ChatMessageText  = "text"
@@ -150,8 +150,8 @@ func NewRevokeMessage(id, conversationID, messageScope, senderID, senderName, ta
 func NewPublicSystemMessage(content string, onlineCount int) Message {
 	return Message{
 		ID:             NewMessageID(),
-		ConversationID: "public",
-		MessageScope:   ScopePublic,
+		ConversationID: ScopeSystem,
+		MessageScope:   ScopeSystem,
 		Type:           MessageTypeSystem,
 		MessageType:    ChatMessageText,
 		Content:        content,
@@ -197,15 +197,17 @@ func ValidateInput(input ClientInput) (*ValidatedInput, error) {
 	targetUserID := strings.TrimSpace(input.TargetUserID)
 	targetName := strings.TrimSpace(input.TargetName)
 
-	if messageScope != ScopePrivate {
-		messageScope = ScopePublic
+	switch messageScope {
+	case ScopePrivate, ScopeGroup, ScopeSystem:
+	default:
+		messageScope = ScopeSystem
 	}
 
 	if conversationID == "" {
-		if messageScope == ScopePrivate {
+		if messageScope == ScopePrivate || messageScope == ScopeGroup {
 			return nil, fmt.Errorf("缺少会话 ID")
 		}
-		conversationID = "public"
+		conversationID = ScopeSystem
 	}
 
 	if messageScope == ScopePrivate && targetUserID == "" {

@@ -5,6 +5,9 @@ function summarizeQuote(quote: MessageQuote): string {
   if (quote.messageType === "image") {
     return "[图片]";
   }
+  if (quote.messageType === "file") {
+    return "[文件]";
+  }
   return quote.content.length > 40 ? `${quote.content.slice(0, 40)}…` : quote.content;
 }
 

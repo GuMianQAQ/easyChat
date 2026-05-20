@@ -1,12 +1,19 @@
 {
-  "name": "easychat-frontend",
+  "name": "mychat",
   "private": true,
   "version": "1.0.0",
+  "description": "MyChat desktop client",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json && node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json && node ./node_modules/vite/bin/vite.js build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:typecheck": "node ./node_modules/typescript/bin/tsc --noEmit -p electron/tsconfig.json",
+    "electron:bundle": "node ./node_modules/esbuild/bin/esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && node ./node_modules/esbuild/bin/esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs",
+    "electron:dev": "node electron/ensure-runtime.mjs && node ./node_modules/esbuild/bin/esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && node ./node_modules/esbuild/bin/esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs && node ./node_modules/wait-on/bin/wait-on.js http://127.0.0.1:5173 && node ./node_modules/electron/cli.js .",
+    "desktop:dev": "concurrently -k -n VITE,ELECTRON -c cyan,green \"node ./node_modules/vite/bin/vite.js\" \"node electron/ensure-runtime.mjs && node ./node_modules/esbuild/bin/esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && node ./node_modules/esbuild/bin/esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs && node ./node_modules/wait-on/bin/wait-on.js http://127.0.0.1:5173 && node ./node_modules/electron/cli.js .\"",
+    "desktop:build": "node ./node_modules/typescript/bin/tsc --noEmit -p electron/tsconfig.json && node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json && node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json && node ./node_modules/vite/bin/vite.js build && node ./node_modules/esbuild/bin/esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && node ./node_modules/esbuild/bin/esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs && node electron/ensure-runtime.mjs && node electron/package-win.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.511.0",
@@ -14,10 +21,34 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.5.2",
+    "concurrently": "^9.2.1",
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.9.3",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.mychat.desktop",
+    "productName": "MyChat",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   }
 }

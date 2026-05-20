@@ -4,7 +4,6 @@ import StatusDot from "../common/StatusDot";
 
 interface ChatHeaderProps {
   conversation: Conversation;
-  onlineCount: number;
   status: ConnectionStatus;
   menuOpen: boolean;
   onDisconnect: () => void;
@@ -14,7 +13,6 @@ interface ChatHeaderProps {
 
 function ChatHeader({
   conversation,
-  onlineCount,
   status,
   menuOpen,
   onDisconnect,
@@ -27,18 +25,18 @@ function ChatHeader({
         <strong>{conversation.title}</strong>
       </div>
       <div className="chat-header-actions">
-        {conversation.type === "public" ? <span className="header-meta">在线 {onlineCount} 人</span> : null}
+        {conversation.type === "group" ? (
+          <span className="header-meta">
+            {conversation.memberCount ? `群成员 ${conversation.memberCount} 人` : "群聊"}
+          </span>
+        ) : null}
         <StatusDot status={status} />
         {status === "connected" ? (
           <button type="button" className="header-action" onClick={onDisconnect}>
             断开连接
           </button>
         ) : (
-          <button
-            type="button"
-            className="header-action header-action-primary"
-            onClick={onReconnect}
-          >
+          <button type="button" className="header-action header-action-primary" onClick={onReconnect}>
             重新连接
           </button>
         )}

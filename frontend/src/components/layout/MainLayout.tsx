@@ -11,6 +11,7 @@ interface MainLayoutProps {
   chatUnreadCount: number;
   sidebarContent: ReactNode;
   mainContent: ReactNode;
+  onOpenCurrentProfile: (x: number, y: number) => void;
   onDisconnect: () => void;
   onLogout: () => void;
 }
@@ -31,6 +32,7 @@ function MainLayout({
   chatUnreadCount,
   sidebarContent,
   mainContent,
+  onOpenCurrentProfile,
   onDisconnect,
   onLogout,
 }: MainLayoutProps) {
@@ -42,6 +44,7 @@ function MainLayout({
         activeDock={activeDock}
         chatUnreadCount={chatUnreadCount}
         onDockChange={onDockChange}
+        onOpenCurrentProfile={onOpenCurrentProfile}
         onDisconnect={onDisconnect}
         onLogout={onLogout}
       />

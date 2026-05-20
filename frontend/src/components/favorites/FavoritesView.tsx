@@ -16,6 +16,9 @@ function favoriteSummary(item: FavoriteItem) {
   if (item.messageType === "image") {
     return "[图片]";
   }
+  if (item.messageType === "file") {
+    return "[文件]";
+  }
   return item.content;
 }
 
@@ -129,13 +132,15 @@ function FavoritesDetail({
                         setPreviewImage(item.content);
                       }}
                     />
+                  ) : item.messageType === "file" ? (
+                    <p className="favorite-text">[文件] {item.content}</p>
                   ) : (
                     <p className="favorite-text">{item.content}</p>
                   )}
 
                   {item.quoteContent ? (
                     <p className="favorite-quote">
-                      引用：{item.quoteMessageType === "image" ? "[图片]" : item.quoteContent}
+                      引用：{item.quoteMessageType === "image" ? "[图片]" : item.quoteMessageType === "file" ? "[文件]" : item.quoteContent}
                     </p>
                   ) : null}
 

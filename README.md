@@ -1,6 +1,6 @@
-# Go 简易聊天室
+# MyChat
 
-一个基于 Go、Gin、WebSocket、React、Vite 和 TypeScript 的简易聊天室。
+一个基于 Go、Gin、WebSocket、React、Vite 和 TypeScript 的聊天程序。
 
 ## 运行
 
