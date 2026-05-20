@@ -61,7 +61,6 @@ interface UseChatSocketResult {
   currentUsername: string;
   roomName: string;
   join: (session: JoinSession) => void;
-  reconnect: () => void;
   updateProfile: (user: CurrentUser) => void;
   replaceConversationMessages: (conversationId: string, items: ServerMessage[]) => void;
   prependConversationMessages: (conversationId: string, items: ServerMessage[]) => void;
@@ -302,15 +301,6 @@ export function useChatSocket(): UseChatSocketResult {
     [addSystemNotice, upsertServerMessages],
   );
 
-  const reconnect = useCallback(() => {
-    if (!lastJoinRef.current) {
-      addSystemNotice({ eventType: "socket-reconnect-before-login", title: "连接", content: "请先登录", level: "error" });
-      return;
-    }
-    closeSocket();
-    connect(lastJoinRef.current);
-  }, [addSystemNotice, closeSocket, connect]);
-
   const updateProfile = useCallback((user: CurrentUser) => {
     setCurrentUserId(user.id);
     setCurrentUsername(user.nickname);
@@ -481,7 +471,6 @@ export function useChatSocket(): UseChatSocketResult {
     currentUsername,
     roomName,
     join: connect,
-    reconnect,
     updateProfile,
     replaceConversationMessages,
     prependConversationMessages,

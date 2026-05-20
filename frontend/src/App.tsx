@@ -123,7 +123,6 @@ function App() {
     currentUserId,
     roomName,
     join,
-    reconnect,
     updateProfile: updateRealtimeProfile,
     replaceConversationMessages,
     prependConversationMessages,
@@ -550,8 +549,10 @@ function App() {
   const handleUpdateGroupConversation = async (
     conversationId: string,
     patch: {
+      avatar?: string;
       name?: string;
       announcement?: string;
+      remark?: string;
       myNickname?: string;
       isMuted?: boolean;
     },
@@ -904,8 +905,6 @@ function App() {
         }
         return uploadImage(storedToken, file);
       }}
-      onReconnect={reconnect}
-      onDisconnect={disconnect}
       onSendText={handleSendText}
       onSendImage={handleSendImage}
       onCaptureScreen={handleCaptureScreen}

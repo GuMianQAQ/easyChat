@@ -4,7 +4,6 @@ import {
   FileStack,
   LogOut,
   MessageSquareMore,
-  Power,
   Settings2,
 } from "lucide-react";
 import type { DockView } from "../../types/chat";
@@ -18,7 +17,6 @@ interface LeftDockProps {
   chatUnreadCount: number;
   onDockChange: (view: DockView) => void;
   onOpenCurrentProfile: (x: number, y: number) => void;
-  onDisconnect: () => void;
   onLogout: () => void;
 }
 
@@ -29,7 +27,6 @@ function LeftDock({
   chatUnreadCount,
   onDockChange,
   onOpenCurrentProfile,
-  onDisconnect,
   onLogout,
 }: LeftDockProps) {
   return (
@@ -82,10 +79,6 @@ function LeftDock({
       </div>
 
       <div className="left-dock-bottom">
-        <button type="button" className="dock-action-button" onClick={onDisconnect}>
-          <Power size={16} />
-          <span>断开</span>
-        </button>
         <button type="button" className="dock-action-button" onClick={onLogout}>
           <LogOut size={16} />
           <span>退出</span>

@@ -1,7 +1,6 @@
 import { Camera } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
-  ConnectionStatus,
   CurrentUser,
   FriendItem,
   PrivacySettings,
@@ -9,7 +8,6 @@ import type {
   UserSettings,
 } from "../../types/chat";
 import Avatar from "../common/Avatar";
-import StatusDot from "../common/StatusDot";
 import SegmentedControl from "./SegmentedControl";
 import SettingsRow from "./SettingsRow";
 import SettingsSection from "./SettingsSection";
@@ -26,7 +24,6 @@ interface SettingsDetailProps {
   gender: CurrentUser["gender"];
   region: string;
   signature: string;
-  status: ConnectionStatus;
   privacy: PrivacySettings;
   blockedFriends: FriendItem[];
   onSettingsChange: (value: UserSettings | ((prev: UserSettings) => UserSettings)) => void;
@@ -66,7 +63,6 @@ export default function SettingsDetail({
   gender,
   region,
   signature,
-  status,
   privacy,
   blockedFriends,
   onSettingsChange,
@@ -381,7 +377,6 @@ export default function SettingsDetail({
 
           <SettingsRow label="账号" description="登录账号" control={<span>{username}</span>} />
           <SettingsRow label="房间" description="当前会话" control={<span>{roomName}</span>} />
-          <SettingsRow label="连接状态" description="WebSocket" control={<StatusDot status={status} />} />
 
           <SettingsRow
             label="性别"

@@ -65,6 +65,7 @@
   position: relative;
   flex-direction: row;
   align-items: stretch;
+  overflow: hidden;
   background: #fff;
 }
 
@@ -74,6 +75,27 @@
   display: flex;
   flex-direction: column;
   background: #fff;
+}
+
+.conversation-detail-overlay {
+  position: absolute;
+  top: 64px;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease;
+  z-index: 20;
+}
+
+.conversation-detail-overlay-open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .message-list {

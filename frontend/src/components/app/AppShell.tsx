@@ -84,8 +84,6 @@ interface AppShellProps {
   onOpenCurrentUserProfile: (x: number, y: number) => void;
   onOpenAvatarPreview: (src: string) => void;
   onUploadImage: (file: File) => Promise<string>;
-  onReconnect: () => void;
-  onDisconnect: () => void;
   onSendText: (content: string, quote?: import("../../types/chat").MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: import("../../types/chat").MessageQuote | null) => Promise<boolean>;
   onCaptureScreen: (quote?: import("../../types/chat").MessageQuote | null) => Promise<boolean>;
@@ -137,8 +135,10 @@ interface AppShellProps {
   onUpdateGroupConversation: (
     conversationId: string,
     patch: {
+      avatar?: string;
       name?: string;
       announcement?: string;
+      remark?: string;
       myNickname?: string;
       isMuted?: boolean;
     },
@@ -170,10 +170,10 @@ export default function AppShell(props: AppShellProps) {
     favoriteItems,
     favoriteType,
     favoriteKeyword,
-    selectedFiles,
-    visibleActiveConversation,
-    status,
-    activeMessages,
+  selectedFiles,
+  visibleActiveConversation,
+  status,
+  activeMessages,
     activeHasMore,
     activeLoadingMore,
     notifications,
@@ -189,7 +189,7 @@ export default function AppShell(props: AppShellProps) {
     selectedContact,
     privacySettings,
     blockedFriends,
-    roomName,
+  roomName,
     friendPanelOpen,
     createGroupPanelOpen,
     friendSearchResult,
@@ -212,11 +212,9 @@ export default function AppShell(props: AppShellProps) {
     onOpenContactRequests,
     onOpenProfileCard,
     onOpenCurrentUserProfile,
-    onOpenAvatarPreview,
-    onUploadImage,
-    onReconnect,
-    onDisconnect,
-    onSendText,
+  onOpenAvatarPreview,
+  onUploadImage,
+  onSendText,
     onSendImage,
     onCaptureScreen,
     onDraftChange,
@@ -337,8 +335,6 @@ export default function AppShell(props: AppShellProps) {
               composerDisabledReason={composerDisabledReason}
               draftContent={draftContent}
               onDraftChange={onDraftChange}
-              onReconnect={onReconnect}
-              onDisconnect={onDisconnect}
               onSendText={onSendText}
               onSendImage={onSendImage}
               onCaptureScreen={onCaptureScreen}
@@ -355,6 +351,7 @@ export default function AppShell(props: AppShellProps) {
               onToggleConversationPinned={onToggleActiveConversationPinned}
               onToggleConversationMuted={onToggleActiveConversationMuted}
               onClearConversation={onClearConversation}
+              onUploadImage={onUploadImage}
               onUpdateGroupConversation={onUpdateGroupConversation}
             />
           ) : activeDock === "contacts" ? (
@@ -394,7 +391,6 @@ export default function AppShell(props: AppShellProps) {
               gender={currentUser.gender}
               region={currentUser.region}
               signature={currentUser.signature}
-              status={status}
               privacy={privacySettings}
               blockedFriends={blockedFriends}
               onSettingsChange={onSettingsChange}
@@ -410,7 +406,6 @@ export default function AppShell(props: AppShellProps) {
             />
           )
         }
-        onDisconnect={onDisconnect}
         onLogout={onLogout}
       />
 

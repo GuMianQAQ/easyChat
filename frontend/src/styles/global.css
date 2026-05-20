@@ -221,52 +221,6 @@ textarea {
   font-weight: 500;
 }
 
-.status-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.status-inline-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #b2b7bc;
-}
-
-.status-inline-connected {
-  color: #2e8a2c;
-}
-
-.status-inline-connected .status-inline-dot {
-  background: #59bf48;
-}
-
-.status-inline-connecting {
-  color: #b77b16;
-}
-
-.status-inline-connecting .status-inline-dot {
-  background: #d79d39;
-}
-
-.status-inline-disconnected {
-  color: var(--text-muted);
-}
-
-.status-inline-disconnected .status-inline-dot {
-  background: #afb4ba;
-}
-
-.status-inline-failed {
-  color: #c74848;
-}
-
-.status-inline-failed .status-inline-dot {
-  background: #df5d5d;
-}
-
 .empty-state {
   min-height: 100%;
   display: flex;

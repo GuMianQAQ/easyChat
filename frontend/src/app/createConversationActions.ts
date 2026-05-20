@@ -274,8 +274,10 @@ export function createConversationActions({
   const handleUpdateGroupConversation = async (
     conversationId: string,
     patch: {
+      avatar?: string;
       name?: string;
       announcement?: string;
+      remark?: string;
       myNickname?: string;
       isMuted?: boolean;
     },

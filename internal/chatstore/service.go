@@ -145,6 +145,7 @@ type ConversationSummary struct {
 	UnreadCount     int    `json:"unreadCount"`
 	Pinned          bool   `json:"pinned"`
 	Muted           bool   `json:"muted"`
+	CreatedBy       string `json:"createdBy,omitempty"`
 	TargetUserID    string `json:"targetUserId,omitempty"`
 	TargetUsername  string `json:"targetUsername,omitempty"`
 	TargetNickname  string `json:"targetNickname,omitempty"`
@@ -162,15 +163,18 @@ type GroupMemberPayload struct {
 }
 
 type GroupConversationPayload struct {
-	ID           string               `json:"id"`
-	Type         string               `json:"type"`
-	Name         string               `json:"name"`
-	Avatar       string               `json:"avatar"`
-	Announcement string               `json:"announcement"`
-	MyNickname   string               `json:"myNickname"`
-	IsMuted      bool                 `json:"isMuted"`
-	MemberCount  int                  `json:"memberCount"`
-	Members      []GroupMemberPayload `json:"members"`
+	ID                  string               `json:"id"`
+	Type                string               `json:"type"`
+	Name                string               `json:"name"`
+	Avatar              string               `json:"avatar"`
+	Announcement        string               `json:"announcement"`
+	Remark              string               `json:"remark"`
+	MyNickname          string               `json:"myNickname"`
+	MyRole              string               `json:"myRole"`
+	CanEditGroupProfile bool                 `json:"canEditGroupProfile"`
+	IsMuted             bool                 `json:"isMuted"`
+	MemberCount         int                  `json:"memberCount"`
+	Members             []GroupMemberPayload `json:"members"`
 }
 
 type CreateGroupConversationInput struct {
@@ -179,8 +183,10 @@ type CreateGroupConversationInput struct {
 }
 
 type UpdateGroupConversationRequest struct {
+	Avatar       *string `json:"avatar,omitempty"`
 	Name         *string `json:"name,omitempty"`
 	Announcement *string `json:"announcement,omitempty"`
+	Remark       *string `json:"remark,omitempty"`
 	MyNickname   *string `json:"myNickname,omitempty"`
 	IsMuted      *bool   `json:"isMuted,omitempty"`
 }
@@ -257,7 +263,7 @@ func NewService(dbPath, uploadsDir string) (*Service, error) {
 
 func (s *Service) ensureBaseConversations() error {
 	now := time.Now()
-	system := Conversation{ID: SystemConversationID, Type: "system", Name: "系统通知", CreatedAt: now, UpdatedAt: now}
+	system := Conversation{ID: SystemConversationID, Type: "system", Name: "绯荤粺閫氱煡", CreatedAt: now, UpdatedAt: now}
 	if err := s.db.Where("id = ?", system.ID).FirstOrCreate(&system).Error; err != nil {
 		return err
 	}
@@ -331,17 +337,17 @@ func (s *Service) EnsurePrivateConversation(currentUserID, targetUserID string) 
 	currentUserID = strings.TrimSpace(currentUserID)
 	targetUserID = strings.TrimSpace(targetUserID)
 	if currentUserID == "" || targetUserID == "" {
-		return ConversationSummary{}, errors.New("缺少用户信息")
+		return ConversationSummary{}, errors.New("缂哄皯鐢ㄦ埛淇℃伅")
 	}
 	if currentUserID == targetUserID {
-		return ConversationSummary{}, errors.New("不能和自己创建私聊")
+		return ConversationSummary{}, errors.New("涓嶈兘鍜岃嚜宸卞垱寤虹鑱?")
 	}
 	if _, err := s.lookupUser(currentUserID); err != nil {
-		return ConversationSummary{}, errors.New("当前用户不存在")
+		return ConversationSummary{}, errors.New("褰撳墠鐢ㄦ埛涓嶅瓨鍦?")
 	}
 	targetUser, err := s.lookupUser(targetUserID)
 	if err != nil {
-		return ConversationSummary{}, errors.New("目标用户不存在")
+		return ConversationSummary{}, errors.New("鐩爣鐢ㄦ埛涓嶅瓨鍦?")
 	}
 
 	conversationID := StablePrivateConversationID(currentUserID, targetUserID)
@@ -417,7 +423,7 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 	creatorID = strings.TrimSpace(creatorID)
 	name = strings.TrimSpace(name)
 	if creatorID == "" {
-		return ConversationSummary{}, errors.New("缺少用户信息")
+		return ConversationSummary{}, errors.New("缂哄皯鐢ㄦ埛淇℃伅")
 	}
 
 	unique := make([]string, 0, len(memberIDs))
@@ -434,10 +440,10 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 		unique = append(unique, memberID)
 	}
 	if len(unique) == 0 {
-		return ConversationSummary{}, errors.New("请至少选择一个好友")
+		return ConversationSummary{}, errors.New("璇疯嚦灏戦€夋嫨涓€涓ソ鍙?")
 	}
 	if name == "" {
-		name = "群聊"
+		name = "缇よ亰"
 	}
 
 	now := time.Now()
@@ -507,14 +513,14 @@ func (s *Service) GetGroupConversation(userID, conversationID string) (GroupConv
 		return GroupConversationPayload{}, err
 	}
 	if conversation.Type != GroupConversationType {
-		return GroupConversationPayload{}, errors.New("不是群聊")
+		return GroupConversationPayload{}, errors.New("涓嶆槸缇よ亰")
 	}
 	member, err := s.memberRecord(userID, conversationID)
 	if err != nil {
 		return GroupConversationPayload{}, err
 	}
 	if member == nil {
-		return GroupConversationPayload{}, errors.New("会话成员不存在")
+		return GroupConversationPayload{}, errors.New("浼氳瘽鎴愬憳涓嶅瓨鍦?")
 	}
 
 	var records []ConversationMember
@@ -539,15 +545,18 @@ func (s *Service) GetGroupConversation(userID, conversationID string) (GroupConv
 	}
 
 	return GroupConversationPayload{
-		ID:           conversation.ID,
-		Type:         conversation.Type,
-		Name:         conversation.Name,
-		Avatar:       conversation.Avatar,
-		Announcement: conversation.Announcement,
-		MyNickname:   member.GroupNickname,
-		IsMuted:      member.IsMuted,
-		MemberCount:  len(items),
-		Members:      items,
+		ID:                  conversation.ID,
+		Type:                conversation.Type,
+		Name:                conversation.Name,
+		Avatar:              conversation.Avatar,
+		Announcement:        conversation.Announcement,
+		Remark:              member.Remark,
+		MyNickname:          member.GroupNickname,
+		MyRole:              member.Role,
+		CanEditGroupProfile: member.Role == "owner",
+		IsMuted:             member.IsMuted,
+		MemberCount:         len(items),
+		Members:             items,
 	}, nil
 }
 
@@ -557,21 +566,37 @@ func (s *Service) UpdateGroupConversation(userID, conversationID string, input U
 		return GroupConversationPayload{}, err
 	}
 	if conversation.Type != GroupConversationType {
-		return GroupConversationPayload{}, errors.New("不是群聊")
+		return GroupConversationPayload{}, errors.New("涓嶆槸缇よ亰")
 	}
 	member, err := s.memberRecord(userID, conversationID)
 	if err != nil {
 		return GroupConversationPayload{}, err
 	}
 	if member == nil {
-		return GroupConversationPayload{}, errors.New("会话成员不存在")
+		return GroupConversationPayload{}, errors.New("浼氳瘽鎴愬憳涓嶅瓨鍦?")
 	}
 
+	if input.Avatar != nil && member.Role != "owner" {
+		return GroupConversationPayload{}, errors.New("鍙湁缇や富鍙互淇敼缇ゅご鍍?")
+	}
+	if input.Name != nil && member.Role != "owner" {
+		return GroupConversationPayload{}, errors.New("鍙湁缇や富鍙互淇敼缇ゅ悕绉?")
+	}
+	if input.Announcement != nil && member.Role != "owner" {
+		return GroupConversationPayload{}, errors.New("鍙湁缇や富鍙互淇敼缇ゅ叕鍛?")
+	}
 	if (input.Name != nil || input.Announcement != nil) && member.Role != "owner" {
-		return GroupConversationPayload{}, errors.New("鍙湁缇ゅ繀闇€涓荤鍙互淇敼缇ょ粍淇℃伅")
+		return GroupConversationPayload{}, errors.New("閸欘亝婀佺紘銈呯箑闂団偓娑撹崵顓搁崣顖欎簰娣囶喗鏁肩紘銈囩矋娣団剝浼?")
 	}
 
 	updates := map[string]any{}
+	if input.Avatar != nil {
+		avatar := strings.TrimSpace(*input.Avatar)
+		if avatar != "" && !strings.HasPrefix(avatar, "/uploads/") {
+			return GroupConversationPayload{}, errors.New("缇ゅご鍍忓湴鍧€鏃犳晥")
+		}
+		updates["avatar"] = avatar
+	}
 	if input.Name != nil {
 		if name := strings.TrimSpace(*input.Name); name != "" {
 			updates["name"] = name
@@ -587,6 +612,9 @@ func (s *Service) UpdateGroupConversation(userID, conversationID string, input U
 		}
 	}
 	memberUpdates := map[string]any{}
+	if input.Remark != nil {
+		memberUpdates["remark"] = strings.TrimSpace(*input.Remark)
+	}
 	if input.MyNickname != nil {
 		memberUpdates["group_nickname"] = strings.TrimSpace(*input.MyNickname)
 	}
@@ -627,7 +655,7 @@ func (s *Service) ConversationMemberIDs(userID, conversationID string) ([]string
 		}
 		return ids, nil
 	default:
-		return nil, errors.New("不支持的会话类型")
+		return nil, errors.New("涓嶆敮鎸佺殑浼氳瘽绫诲瀷")
 	}
 }
 
@@ -775,7 +803,7 @@ func (s *Service) SaveMessage(user auth.PublicUser, input PersistMessageInput) (
 		ID:             normalizeID(input.ID),
 		ConversationID: conversation.ID,
 		SenderID:       user.ID,
-		SenderName:     user.Nickname,
+		SenderName:     s.groupDisplayName(conversation.ID, user.ID, user.Nickname),
 		SenderAvatar:   user.Avatar,
 		MessageType:    input.MessageType,
 		Content:        input.Content,
@@ -794,7 +822,7 @@ func (s *Service) SaveMessage(user auth.PublicUser, input PersistMessageInput) (
 
 func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID string) (RevokeResult, error) {
 	if strings.TrimSpace(messageID) == "" {
-		return RevokeResult{}, errors.New("缺少消息 ID")
+		return RevokeResult{}, errors.New("缂哄皯娑堟伅 ID")
 	}
 	conversation, err := s.getConversationForUser(user.ID, conversationID)
 	if err != nil {
@@ -803,16 +831,16 @@ func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID 
 
 	var record Message
 	if err := s.db.Where("id = ? AND conversation_id = ?", messageID, conversationID).First(&record).Error; err != nil {
-		return RevokeResult{}, errors.New("消息不存在")
+		return RevokeResult{}, errors.New("娑堟伅涓嶅瓨鍦?")
 	}
 	if record.SenderID != user.ID {
-		return RevokeResult{}, errors.New("不能撤回别人的消息")
+		return RevokeResult{}, errors.New("涓嶈兘鎾ゅ洖鍒汉鐨勬秷鎭?")
 	}
 	if record.Revoked {
-		return RevokeResult{}, errors.New("消息已撤回")
+		return RevokeResult{}, errors.New("娑堟伅宸叉挙鍥?")
 	}
 	if time.Since(record.CreatedAt) > 2*time.Minute {
-		return RevokeResult{}, errors.New("超过可撤回时间")
+		return RevokeResult{}, errors.New("瓒呰繃鍙挙鍥炴椂闂?")
 	}
 	if err := s.db.Model(&record).Update("revoked", true).Error; err != nil {
 		return RevokeResult{}, err
@@ -827,7 +855,7 @@ func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID 
 			Type:           "revoke",
 			MessageType:    "text",
 			SenderID:       user.ID,
-			SenderName:     user.Nickname,
+			SenderName:     s.groupDisplayName(conversation.ID, user.ID, user.Nickname),
 			Content:        "",
 			CreatedAt:      formatTime(now),
 		},
@@ -846,18 +874,18 @@ func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID 
 func (s *Service) CreateFavorite(userID, messageID string) (FavoritePayload, error) {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return FavoritePayload{}, errors.New("缺少消息 ID")
+		return FavoritePayload{}, errors.New("缂哄皯娑堟伅 ID")
 	}
 
 	var message Message
 	if err := s.db.First(&message, "id = ?", messageID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return FavoritePayload{}, errors.New("消息不存在")
+			return FavoritePayload{}, errors.New("娑堟伅涓嶅瓨鍦?")
 		}
 		return FavoritePayload{}, err
 	}
 	if message.Revoked {
-		return FavoritePayload{}, errors.New("已撤回消息不能收藏")
+		return FavoritePayload{}, errors.New("宸叉挙鍥炴秷鎭笉鑳芥敹钘?")
 	}
 
 	conversation, err := s.getConversationForUser(userID, message.ConversationID)
@@ -915,14 +943,14 @@ func (s *Service) CreateFavorite(userID, messageID string) (FavoritePayload, err
 func (s *Service) DeleteFavorite(userID, favoriteID string) error {
 	favoriteID = strings.TrimSpace(favoriteID)
 	if favoriteID == "" {
-		return errors.New("缺少收藏 ID")
+		return errors.New("缂哄皯鏀惰棌 ID")
 	}
 	result := s.db.Where("id = ? AND user_id = ?", favoriteID, userID).Delete(&Favorite{})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("收藏不存在")
+		return errors.New("鏀惰棌涓嶅瓨鍦?")
 	}
 	return nil
 }
@@ -930,14 +958,14 @@ func (s *Service) DeleteFavorite(userID, favoriteID string) error {
 func (s *Service) DeleteFavoriteByMessage(userID, messageID string) error {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return errors.New("缺少消息 ID")
+		return errors.New("缂哄皯娑堟伅 ID")
 	}
 	result := s.db.Where("user_id = ? AND message_id = ?", userID, messageID).Delete(&Favorite{})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("收藏不存在")
+		return errors.New("鏀惰棌涓嶅瓨鍦?")
 	}
 	return nil
 }
@@ -974,13 +1002,13 @@ func (s *Service) ListFavorites(userID, messageType, keyword string) ([]Favorite
 
 func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 	if file == nil {
-		return "", errors.New("缺少图片")
+		return "", errors.New("缂哄皯鍥剧墖")
 	}
 	if file.Size > MaxUploadBytes {
-		return "", errors.New("图片超过 2MB")
+		return "", errors.New("鍥剧墖瓒呰繃 2MB")
 	}
 	if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
-		return "", errors.New("仅支持图片")
+		return "", errors.New("浠呮敮鎸佸浘鐗?")
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))
@@ -1009,10 +1037,10 @@ func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 
 func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileHeader) (FilePayload, error) {
 	if file == nil {
-		return FilePayload{}, errors.New("请上传文件")
+		return FilePayload{}, errors.New("璇蜂笂浼犳枃浠?")
 	}
 	if file.Size > 10*1024*1024 {
-		return FilePayload{}, errors.New("文件超过 10MB")
+		return FilePayload{}, errors.New("鏂囦欢瓒呰繃 10MB")
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))
@@ -1097,7 +1125,7 @@ func (s *Service) GetMessagesAround(userID, conversationID, messageID string, li
 
 	var target Message
 	if err := s.db.Where("id = ? AND conversation_id = ?", strings.TrimSpace(messageID), conversationID).First(&target).Error; err != nil {
-		return MessagePage{}, errors.New("消息不存在")
+		return MessagePage{}, errors.New("娑堟伅涓嶅瓨鍦?")
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -1123,7 +1151,7 @@ func (s *Service) GetMessagesAround(userID, conversationID, messageID string, li
 		}
 	}
 	if index < 0 {
-		return MessagePage{}, errors.New("消息不存在")
+		return MessagePage{}, errors.New("娑堟伅涓嶅瓨鍦?")
 	}
 
 	half := limit / 2
@@ -1156,7 +1184,7 @@ func (s *Service) GetMessagesAround(userID, conversationID, messageID string, li
 func (s *Service) resolveConversation(userID, conversationID, messageScope string) (Conversation, error) {
 	conversationID = strings.TrimSpace(conversationID)
 	if conversationID == "" {
-		return Conversation{}, errors.New("缺少会话 ID")
+		return Conversation{}, errors.New("缂哄皯浼氳瘽 ID")
 	}
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {
@@ -1167,10 +1195,10 @@ func (s *Service) resolveConversation(userID, conversationID, messageScope strin
 		expected = conversation.Type
 	}
 	if expected != conversation.Type {
-		return Conversation{}, errors.New("会话类型不匹配")
+		return Conversation{}, errors.New("浼氳瘽绫诲瀷涓嶅尮閰?")
 	}
 	if conversation.Type != "private" && conversation.Type != GroupConversationType && conversation.Type != "system" {
-		return Conversation{}, errors.New("不支持的会话类型")
+		return Conversation{}, errors.New("涓嶆敮鎸佺殑浼氳瘽绫诲瀷")
 	}
 	return conversation, nil
 }
@@ -1208,13 +1236,13 @@ func fileKind(fileName, mimeType string) string {
 
 func (s *Service) getConversationForUser(userID, conversationID string) (Conversation, error) {
 	if strings.TrimSpace(conversationID) == "" {
-		return Conversation{}, errors.New("缺少会话")
+		return Conversation{}, errors.New("缂哄皯浼氳瘽")
 	}
 
 	var conversation Conversation
 	if err := s.db.First(&conversation, "id = ?", conversationID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Conversation{}, errors.New("会话不存在")
+			return Conversation{}, errors.New("浼氳瘽涓嶅瓨鍦?")
 		}
 		return Conversation{}, err
 	}
@@ -1230,10 +1258,10 @@ func (s *Service) getConversationForUser(userID, conversationID string) (Convers
 		return Conversation{}, err
 	}
 	if count == 0 {
-		return Conversation{}, errors.New("无权访问该会话")
+		return Conversation{}, errors.New("鏃犳潈璁块棶璇ヤ細璇?")
 	}
 	if conversation.Type != "private" && conversation.Type != GroupConversationType {
-		return Conversation{}, errors.New("不支持的会话类型")
+		return Conversation{}, errors.New("涓嶆敮鎸佺殑浼氳瘽绫诲瀷")
 	}
 	return conversation, nil
 }
@@ -1314,9 +1342,9 @@ func (s *Service) toPayload(currentUserID string, record Message, conversation C
 	if record.Revoked {
 		messageType = "text"
 		if record.SenderID == currentUserID {
-			content = "你撤回了一条消息"
+			content = "浣犳挙鍥炰簡涓€鏉℃秷鎭?"
 		} else {
-			content = "对方撤回了一条消息"
+			content = "瀵规柟鎾ゅ洖浜嗕竴鏉℃秷鎭?"
 		}
 	}
 
@@ -1341,10 +1369,8 @@ func (s *Service) toPayload(currentUserID string, record Message, conversation C
 			message.TargetUserID = target.ID
 			message.TargetName = target.Nickname
 		}
-	} else if conversation.Type == GroupConversationType && record.SenderID == currentUserID {
-		if member, err := s.memberRecord(currentUserID, record.ConversationID); err == nil && member != nil && strings.TrimSpace(member.GroupNickname) != "" {
-			message.SenderName = strings.TrimSpace(member.GroupNickname)
-		}
+	} else if conversation.Type == GroupConversationType {
+		message.SenderName = s.groupDisplayName(record.ConversationID, record.SenderID, record.SenderName)
 	}
 	return message
 }
@@ -1355,6 +1381,7 @@ func (s *Service) buildConversationSummary(currentUserID string, conversation Co
 		Type:            conversation.Type,
 		Name:            conversation.Name,
 		Avatar:          conversation.Avatar,
+		CreatedBy:       conversation.CreatedBy,
 		UnreadCount:     0,
 		LastMessage:     "",
 		LastMessageType: "text",
@@ -1395,7 +1422,7 @@ func (s *Service) buildConversationSummary(currentUserID string, conversation Co
 	if err := query.Order("created_at desc").First(&record).Error; err == nil {
 		lastMessage := summarizeMessageRecord(record, record.SenderID == currentUserID)
 		if conversation.Type == GroupConversationType {
-			lastMessage = fmt.Sprintf("%s：%s", record.SenderName, lastMessage)
+			lastMessage = fmt.Sprintf("%s：%s", s.groupDisplayName(conversation.ID, record.SenderID, record.SenderName), lastMessage)
 		}
 		summary.LastMessage = lastMessage
 		summary.LastMessageType = record.MessageType
@@ -1415,7 +1442,7 @@ func (s *Service) privatePartner(conversationID, currentUserID string) (auth.Use
 		}
 		return s.lookupUser(member.UserID)
 	}
-	return auth.User{}, errors.New("私聊成员不存在")
+	return auth.User{}, errors.New("绉佽亰鎴愬憳涓嶅瓨鍦?")
 }
 
 func (s *Service) lookupUser(userID string) (auth.User, error) {
@@ -1450,6 +1477,19 @@ func (s *Service) memberRecord(userID, conversationID string) (*ConversationMemb
 	return &member, nil
 }
 
+func (s *Service) groupDisplayName(conversationID, userID, fallback string) string {
+	if conversationID == "" || userID == "" {
+		return strings.TrimSpace(fallback)
+	}
+	member, err := s.memberRecord(userID, conversationID)
+	if err == nil && member != nil {
+		if nickname := strings.TrimSpace(member.GroupNickname); nickname != "" {
+			return nickname
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
 func (s *Service) ensureSettingsMember(userID, conversationID string) (*ConversationMember, error) {
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {
@@ -1465,7 +1505,7 @@ func (s *Service) ensureSettingsMember(userID, conversationID string) (*Conversa
 	}
 
 	if conversation.Type == "private" || conversation.Type == GroupConversationType {
-		return nil, errors.New("会话成员不存在")
+		return nil, errors.New("浼氳瘽鎴愬憳涓嶅瓨鍦?")
 	}
 
 	now := time.Now()
@@ -1494,19 +1534,19 @@ func StablePrivateConversationID(leftUserID, rightUserID string) string {
 func summarizeMessageRecord(record Message, isSelf bool) string {
 	if record.Revoked {
 		if isSelf {
-			return "你撤回了一条消息"
+			return "浣犳挙鍥炰簡涓€鏉℃秷鎭?"
 		}
-		return "对方撤回了一条消息"
+		return "瀵规柟鎾ゅ洖浜嗕竴鏉℃秷鎭?"
 	}
 	if record.MessageType == "image" {
-		return "[图片]"
+		return "[鍥剧墖]"
 	}
 	if record.MessageType == "file" {
 		fileName := path.Base(strings.SplitN(record.Content, "?", 2)[0])
 		if fileName == "." || fileName == "/" {
-			return "[鏂囦欢]"
+			return "[閺傚洣娆"
 		}
-		return fmt.Sprintf("[鏂囦欢] %s", fileName)
+		return fmt.Sprintf("[閺傚洣娆 %s", fileName)
 	}
 	return record.Content
 }

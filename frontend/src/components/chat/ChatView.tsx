@@ -33,8 +33,6 @@ interface ChatMainProps {
   composerDisabledReason?: string;
   draftContent: string;
   onDraftChange: (value: string) => void;
-  onReconnect: () => void;
-  onDisconnect: () => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
   onCaptureScreen: (quote?: MessageQuote | null) => Promise<boolean>;
@@ -54,11 +52,14 @@ interface ChatMainProps {
   onToggleConversationPinned: (next: boolean) => void;
   onToggleConversationMuted: (next: boolean) => void;
   onClearConversation: () => void;
+  onUploadImage: (file: File) => Promise<string>;
   onUpdateGroupConversation: (
     conversationId: string,
     patch: {
+      avatar?: string;
       name?: string;
       announcement?: string;
+      remark?: string;
       myNickname?: string;
       isMuted?: boolean;
     },
@@ -106,8 +107,6 @@ function ChatMain({
   composerDisabledReason = "",
   draftContent,
   onDraftChange,
-  onReconnect,
-  onDisconnect,
   onSendText,
   onSendImage,
   onCaptureScreen,
@@ -124,6 +123,7 @@ function ChatMain({
   onToggleConversationPinned,
   onToggleConversationMuted,
   onClearConversation,
+  onUploadImage,
   onUpdateGroupConversation,
 }: ChatMainProps) {
   const [previewImage, setPreviewImage] = useState("");
@@ -143,6 +143,21 @@ function ChatMain({
       setJumpToMessageId(externalJumpToMessageId);
     }
   }, [externalJumpToMessageId]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
 
   if (activeConversation.type === "system") {
     return (
@@ -205,10 +220,7 @@ function ChatMain({
       <div className="chat-room-main">
         <ChatHeader
           conversation={activeConversation}
-          status={status}
           menuOpen={menuOpen}
-          onDisconnect={onDisconnect}
-          onReconnect={onReconnect}
           onToggleMenu={() => setMenuOpen((open) => !open)}
         />
         <MessageList
@@ -258,7 +270,10 @@ function ChatMain({
         />
       </div>
 
-      {menuOpen ? (
+      <div
+        className={`conversation-detail-overlay ${menuOpen ? "conversation-detail-overlay-open" : ""}`}
+        aria-hidden={!menuOpen}
+      >
         <ConversationDetailPanel
           conversation={activeConversation}
           messages={messages}
@@ -267,9 +282,10 @@ function ChatMain({
           onToggleMuted={onToggleConversationMuted}
           onTogglePinned={onToggleConversationPinned}
           onClearMessages={onClearConversation}
+          onUploadImage={onUploadImage}
           onUpdateGroupConversation={onUpdateGroupConversation}
         />
-      ) : null}
+      </div>
 
       <ImagePreviewModal open={Boolean(previewImage)} src={previewImage} onClose={() => setPreviewImage("")} />
       {dragging ? <div className="drag-overlay">释放发送图片</div> : null}

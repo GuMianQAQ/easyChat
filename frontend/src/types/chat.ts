@@ -145,7 +145,10 @@ export interface GroupConversationPayload {
   name: string;
   avatar: string;
   announcement: string;
+  remark: string;
   myNickname: string;
+  myRole: "owner" | "member";
+  canEditGroupProfile: boolean;
   isMuted: boolean;
   memberCount: number;
   members: GroupMemberItem[];

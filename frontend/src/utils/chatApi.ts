@@ -83,8 +83,10 @@ export async function updateGroupConversation(
   token: string,
   conversationId: string,
   patch: {
+    avatar?: string;
     name?: string;
     announcement?: string;
+    remark?: string;
     myNickname?: string;
     isMuted?: boolean;
   },

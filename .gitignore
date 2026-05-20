@@ -99,3 +99,6 @@ frontend/coverage/
 .yarn/
 .yarn-cache/
 .npm-cache/
+
+frontend/__node_modules_tmp__/
+**/__node_modules_tmp__/

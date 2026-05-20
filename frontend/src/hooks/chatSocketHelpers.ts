@@ -50,6 +50,12 @@ export function normalizeQuote(quote?: MessageQuote | null): MessageQuote | null
 export function mapIncomingMessage(message: ServerMessage, currentUserId: string, seed: number): ChatMessage {
   const senderId = safeText(message.senderId);
   const revoked = Boolean(message.revoked);
+  const isSelf = message.type === "chat" && senderId === currentUserId;
+  const content = revoked
+    ? isSelf
+      ? "你撤回了一条消息"
+      : "对方撤回了一条消息"
+    : safeText(message.content);
 
   return {
     id: safeText(message.id) || createId("server", seed),
@@ -73,11 +79,11 @@ export function mapIncomingMessage(message: ServerMessage, currentUserId: string
     senderName: safeText(message.senderName),
     targetUserId: safeText(message.targetUserId),
     targetName: safeText(message.targetName),
-    content: safeText(message.content),
+    content,
     createdAt: safeText(message.createdAt),
     onlineCount: safeNumber(message.onlineCount),
     avatar: safeText(message.avatar),
-    isSelf: message.type === "chat" && senderId === currentUserId,
+    isSelf,
     quote: normalizeQuote(message.quote),
     status: message.type === "chat" ? "sent" : undefined,
     revoked,
