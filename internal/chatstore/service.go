@@ -2,12 +2,8 @@ package chatstore
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
-	"easyChat/internal/auth"
-
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -226,19 +222,8 @@ type Service struct {
 	uploadsDir string
 }
 
-func NewService(dbPath, uploadsDir string) (*Service, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, err
-	}
+func NewService(db *gorm.DB, uploadsDir string) (*Service, error) {
 	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
-		return nil, err
-	}
-
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	if err := db.AutoMigrate(&auth.User{}, &Conversation{}, &ConversationMember{}, &Message{}, &Favorite{}, &UploadedFile{}); err != nil {
 		return nil, err
 	}
 

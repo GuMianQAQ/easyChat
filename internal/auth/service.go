@@ -9,13 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -90,19 +88,7 @@ type Service struct {
 	secret   []byte
 }
 
-func NewService(dbPath string) (*Service, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, err
-	}
-
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	if err := db.AutoMigrate(&User{}); err != nil {
-		return nil, err
-	}
-
+func NewService(db *gorm.DB) (*Service, error) {
 	secret := strings.TrimSpace(os.Getenv("EASYCHAT_JWT_SECRET"))
 	if secret == "" {
 		secret = "easychat-local-development-secret"
@@ -301,14 +287,6 @@ func (s *Service) ChangePassword(token string, req ChangePasswordRequest) error 
 		return err
 	}
 	return nil
-}
-
-func (s *Service) Close() error {
-	sqlDB, err := s.db.DB()
-	if err != nil {
-		return err
-	}
-	return sqlDB.Close()
 }
 
 func (s *Service) authResponse(user User) (AuthResponse, error) {

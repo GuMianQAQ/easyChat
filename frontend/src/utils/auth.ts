@@ -17,7 +17,7 @@ async function requestJSON<T>(input: RequestInfo | URL, init?: RequestInit): Pro
     const response = await fetch(typeof input === "string" ? resolveApiUrl(input) : input, init);
     const payload = (await response.json().catch(() => ({}))) as { error?: string } & T;
     if (!response.ok) {
-      throw createApiError(response.status, payload.error || "请求失败");
+      throw createApiError(response.status, payload.error || "\u8bf7\u6c42\u5931\u8d25");
     }
     return payload;
   } catch (error) {
@@ -25,7 +25,7 @@ async function requestJSON<T>(input: RequestInfo | URL, init?: RequestInit): Pro
       throw error;
     }
     if (error instanceof TypeError) {
-      throw createApiError(0, "网络异常，请稍后重试");
+      throw createApiError(0, "\u7f51\u7edc\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5");
     }
     throw error;
   }

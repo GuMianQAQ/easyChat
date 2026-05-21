@@ -5,12 +5,22 @@ import (
 	"testing"
 
 	"easyChat/internal/auth"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
 func newTestService(t *testing.T) *Service {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "social.db")
-	service, err := NewService(dbPath)
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open database failed: %v", err)
+	}
+	if err := db.AutoMigrate(&auth.User{}, &Friendship{}, &FriendRequest{}); err != nil {
+		t.Fatalf("migrate database failed: %v", err)
+	}
+	service, err := NewService(db)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}

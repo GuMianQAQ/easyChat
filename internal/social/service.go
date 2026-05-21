@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"easyChat/internal/auth"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -140,19 +137,7 @@ type Service struct {
 	db *gorm.DB
 }
 
-func NewService(dbPath string) (*Service, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, err
-	}
-
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	if err := db.AutoMigrate(&auth.User{}, &Friendship{}, &FriendRequest{}); err != nil {
-		return nil, err
-	}
-
+func NewService(db *gorm.DB) (*Service, error) {
 	return &Service{db: db}, nil
 }
 

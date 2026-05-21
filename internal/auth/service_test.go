@@ -3,16 +3,31 @@ package auth
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestRegisterLoginAndProfileFlow(t *testing.T) {
-	svc, err := NewService(filepath.Join(t.TempDir(), "chat.db"))
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "chat.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	if err := db.AutoMigrate(&User{}); err != nil {
+		t.Fatalf("migrate database: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("sql db: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+	})
+
+	svc, err := NewService(db)
 	if err != nil {
 		t.Fatalf("create service: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = svc.Close()
-	})
 
 	captcha, err := svc.Captcha()
 	if err != nil {
