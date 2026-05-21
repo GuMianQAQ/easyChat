@@ -306,6 +306,7 @@
 
 .conversation-profile-item:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .conversation-profile-item-head {
@@ -378,6 +379,71 @@
 .conversation-profile-item-hint,
 .conversation-profile-item-error {
   margin: 6px 0 0;
+}
+
+.conversation-danger-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.18);
+}
+
+.conversation-danger-dialog {
+  width: min(100%, 320px);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.conversation-danger-dialog-copy {
+  display: grid;
+  gap: 10px;
+  padding: 20px 20px 16px;
+}
+
+.conversation-danger-dialog-copy strong {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.conversation-danger-dialog-copy p,
+.conversation-danger-dialog-error {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.conversation-danger-dialog-error {
+  color: var(--danger);
+}
+
+.conversation-danger-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--border-line);
+}
+
+.conversation-danger-dialog-button {
+  height: 46px;
+  color: var(--text-primary);
+  background: #fff;
+}
+
+.conversation-danger-dialog-button + .conversation-danger-dialog-button {
+  border-left: 1px solid var(--border-line);
+}
+
+.conversation-danger-dialog-button:disabled {
+  opacity: 0.58;
+}
+
+.conversation-danger-dialog-button-confirm {
+  color: var(--danger);
 }
 
 @keyframes conversation-spin {

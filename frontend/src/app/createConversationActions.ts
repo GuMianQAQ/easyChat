@@ -16,10 +16,12 @@ import {
   createFavorite,
   createGroupConversation,
   createPrivateConversation,
+  dismissGroupConversation,
   deleteConversation,
   deleteFavorite,
   fetchConversations,
   fetchMessages,
+  leaveGroupConversation,
   markConversationRead,
   updateConversationSettings,
   updateGroupConversation,
@@ -465,6 +467,85 @@ export function createConversationActions({
     }
   };
 
+  const applyRemovedConversation = (removedConversationId: string, nextConversations: Conversation[]) => {
+    setConversations(nextConversations);
+    setFavoriteItems((previous) => previous.filter((item) => item.conversationId !== removedConversationId));
+    replaceConversationMessages(removedConversationId, []);
+    setHistoryState((previous) => {
+      const next = { ...previous };
+      delete next[removedConversationId];
+      return next;
+    });
+    if (activeConversationId === removedConversationId) {
+      const fallback = nextConversations.find((item) => item.type !== "system");
+      setActiveConversationId(fallback?.id || "");
+    }
+  };
+
+  const handleLeaveGroupConversation = async (conversation: Conversation) => {
+    if (!storedToken) {
+      handleAuthExpired();
+      return false;
+    }
+
+    try {
+      await leaveGroupConversation(storedToken, conversation.id);
+      const remoteItems = (await fetchConversations(storedToken)).map((item) => conversationFromPayload(item));
+      const nextConversations = mergeRemoteConversations(conversations, remoteItems);
+      applyRemovedConversation(conversation.id, nextConversations);
+      addSystemNotice({
+        eventType: `group-leave-${conversation.id}`,
+        title: "群聊",
+        content: "你已退出群聊",
+        level: "info",
+      });
+      return true;
+    } catch (error) {
+      if (handleAuthError(error)) {
+        return false;
+      }
+      addSystemNotice({
+        eventType: `group-leave-error-${conversation.id}`,
+        title: "群聊",
+        content: error instanceof Error ? error.message : "退出群聊失败",
+        level: "error",
+      });
+      return false;
+    }
+  };
+
+  const handleDismissGroupConversation = async (conversation: Conversation) => {
+    if (!storedToken) {
+      handleAuthExpired();
+      return false;
+    }
+
+    try {
+      await dismissGroupConversation(storedToken, conversation.id);
+      const remoteItems = (await fetchConversations(storedToken)).map((item) => conversationFromPayload(item));
+      const nextConversations = mergeRemoteConversations(conversations, remoteItems);
+      applyRemovedConversation(conversation.id, nextConversations);
+      addSystemNotice({
+        eventType: `group-dismiss-${conversation.id}`,
+        title: "群聊",
+        content: "群聊已解散",
+        level: "info",
+      });
+      return true;
+    } catch (error) {
+      if (handleAuthError(error)) {
+        return false;
+      }
+      addSystemNotice({
+        eventType: `group-dismiss-error-${conversation.id}`,
+        title: "群聊",
+        content: error instanceof Error ? error.message : "解散群聊失败",
+        level: "error",
+      });
+      return false;
+    }
+  };
+
   const toggleFavorite = async (message: ChatMessage) => {
     if (!storedToken) {
       handleAuthExpired();
@@ -596,5 +677,7 @@ export function createConversationActions({
     clearContacts,
     clearLoginCache,
     openFavorite,
+    handleLeaveGroupConversation,
+    handleDismissGroupConversation,
   };
 }

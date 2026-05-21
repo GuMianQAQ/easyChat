@@ -1,4 +1,4 @@
-import { Plus, Search } from "lucide-react";
+import { MessageCirclePlus, Plus, Search, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Conversation } from "../../types/chat";
 import Avatar from "../common/Avatar";
@@ -186,7 +186,8 @@ function ConversationList({
                   onOpenAddFriend();
                 }}
               >
-                添加好友
+                <UserPlus size={16} />
+                <span>添加好友</span>
               </button>
               <button
                 type="button"
@@ -196,7 +197,8 @@ function ConversationList({
                   onOpenCreateGroup();
                 }}
               >
-                发起群聊
+                <MessageCirclePlus size={16} />
+                <span>发起群聊</span>
               </button>
             </div>
           ) : null}

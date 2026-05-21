@@ -764,6 +764,8 @@ function App() {
     clearContacts,
     clearLoginCache,
     openFavorite,
+    handleLeaveGroupConversation,
+    handleDismissGroupConversation,
   } = createConversationActions({
     storedToken,
     currentUser,
@@ -942,6 +944,8 @@ function App() {
         void handleUpdateConversationSettings(visibleActiveConversation.id, { isMuted: next });
       }}
       onClearConversation={() => void handleClearConversation()}
+      onLeaveGroupConversation={(conversation) => handleLeaveGroupConversation(conversation)}
+      onDismissGroupConversation={(conversation) => handleDismissGroupConversation(conversation)}
       onCloseContactsManagement={() => setContactsManagementOpen(false)}
       onOpenChatFromContact={handleOpenContactChat}
       onUpdateContact={handleUpdateContact}

@@ -125,6 +125,20 @@ export async function clearConversationMessages(token: string, conversationId: s
   });
 }
 
+export async function leaveGroupConversation(token: string, conversationId: string): Promise<void> {
+  await requestJSON<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(conversationId)}/group/leave`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export async function dismissGroupConversation(token: string, conversationId: string): Promise<void> {
+  await requestJSON<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(conversationId)}/group`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function deleteConversation(token: string, conversationId: string): Promise<void> {
   await requestJSON<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(conversationId)}`, {
     method: "DELETE",

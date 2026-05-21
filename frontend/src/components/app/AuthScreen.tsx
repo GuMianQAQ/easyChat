@@ -1,4 +1,5 @@
 import LoginPage from "../login/LoginPage";
+import DesktopWindowFrame from "./DesktopWindowFrame";
 import type { AuthDraft, AuthMode } from "../../types/chat";
 
 interface AuthScreenProps {
@@ -18,5 +19,9 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen(props: AuthScreenProps) {
-  return <LoginPage {...props} />;
+  return (
+    <DesktopWindowFrame>
+      <LoginPage {...props} />
+    </DesktopWindowFrame>
+  );
 }

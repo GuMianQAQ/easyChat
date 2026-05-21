@@ -407,6 +407,46 @@ func (s *Server) registerAPIRoutes(router *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"conversation": conversation})
 	})
 
+	api.POST("/conversations/:conversationId/group/leave", func(c *gin.Context) {
+		user, err := s.Auth.UserFromToken(bearerToken(c))
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		if err := s.Store.LeaveGroupConversation(user.ID, c.Param("conversationId")); err != nil {
+			status := http.StatusBadRequest
+			if strings.Contains(err.Error(), "鏃犳潈") || strings.Contains(err.Error(), "涓嶅湪璇ョ兢鑱婁腑") {
+				status = http.StatusForbidden
+			}
+			if strings.Contains(err.Error(), "缇や富") {
+				status = http.StatusForbidden
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	api.DELETE("/conversations/:conversationId/group", func(c *gin.Context) {
+		user, err := s.Auth.UserFromToken(bearerToken(c))
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		if err := s.Store.DismissGroupConversation(user.ID, c.Param("conversationId")); err != nil {
+			status := http.StatusBadRequest
+			if strings.Contains(err.Error(), "鏃犳潈") || strings.Contains(err.Error(), "涓嶅湪璇ョ兢鑱婁腑") {
+				status = http.StatusForbidden
+			}
+			if strings.Contains(err.Error(), "鍙湁缇や富") {
+				status = http.StatusForbidden
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
 	api.GET("/messages", func(c *gin.Context) {
 		user, err := s.Auth.UserFromToken(bearerToken(c))
 		if err != nil {

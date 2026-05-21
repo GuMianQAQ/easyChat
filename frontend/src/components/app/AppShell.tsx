@@ -1,6 +1,7 @@
 import AddFriendPanel from "../chat/AddFriendPanel";
 import CreateGroupPanel from "../chat/CreateGroupPanel";
 import ChatView from "../chat/ChatView";
+import DesktopWindowFrame from "./DesktopWindowFrame";
 import UserProfileCard from "../common/UserProfileCard";
 import ContactsView from "../contacts/ContactsView";
 import FavoritesView from "../favorites/FavoritesView";
@@ -100,6 +101,8 @@ interface AppShellProps {
   onToggleActiveConversationPinned: (next: boolean) => void;
   onToggleActiveConversationMuted: (next: boolean) => void;
   onClearConversation: () => void;
+  onLeaveGroupConversation: (conversation: Conversation) => Promise<boolean>;
+  onDismissGroupConversation: (conversation: Conversation) => Promise<boolean>;
   onCloseContactsManagement: () => void;
   onOpenChatFromContact: (contact: ContactItem) => void;
   onUpdateContact: (contactId: string, patch: Partial<ContactItem>) => void;
@@ -230,6 +233,8 @@ export default function AppShell(props: AppShellProps) {
     onToggleActiveConversationPinned,
     onToggleActiveConversationMuted,
     onClearConversation,
+    onLeaveGroupConversation,
+    onDismissGroupConversation,
     onCloseContactsManagement,
     onOpenChatFromContact,
     onUpdateContact,
@@ -268,7 +273,8 @@ export default function AppShell(props: AppShellProps) {
   } = props;
 
   return (
-    <>
+    <DesktopWindowFrame>
+      <>
       <MainLayout
         activeDock={activeDock}
         onDockChange={onDockChange}
@@ -351,6 +357,8 @@ export default function AppShell(props: AppShellProps) {
               onToggleConversationPinned={onToggleActiveConversationPinned}
               onToggleConversationMuted={onToggleActiveConversationMuted}
               onClearConversation={onClearConversation}
+              onLeaveGroupConversation={onLeaveGroupConversation}
+              onDismissGroupConversation={onDismissGroupConversation}
               onUploadImage={onUploadImage}
               onUpdateGroupConversation={onUpdateGroupConversation}
             />
@@ -449,6 +457,7 @@ export default function AppShell(props: AppShellProps) {
           onOpenAvatarPreview={onOpenAvatarPreview}
         />
       ) : null}
-    </>
+      </>
+    </DesktopWindowFrame>
   );
 }

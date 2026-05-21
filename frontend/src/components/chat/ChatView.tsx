@@ -52,6 +52,8 @@ interface ChatMainProps {
   onToggleConversationPinned: (next: boolean) => void;
   onToggleConversationMuted: (next: boolean) => void;
   onClearConversation: () => void;
+  onLeaveGroupConversation: (conversation: Conversation) => Promise<boolean>;
+  onDismissGroupConversation: (conversation: Conversation) => Promise<boolean>;
   onUploadImage: (file: File) => Promise<string>;
   onUpdateGroupConversation: (
     conversationId: string,
@@ -123,6 +125,8 @@ function ChatMain({
   onToggleConversationPinned,
   onToggleConversationMuted,
   onClearConversation,
+  onLeaveGroupConversation,
+  onDismissGroupConversation,
   onUploadImage,
   onUpdateGroupConversation,
 }: ChatMainProps) {
@@ -282,6 +286,8 @@ function ChatMain({
           onToggleMuted={onToggleConversationMuted}
           onTogglePinned={onToggleConversationPinned}
           onClearMessages={onClearConversation}
+          onLeaveGroup={() => onLeaveGroupConversation(activeConversation)}
+          onDismissGroup={() => onDismissGroupConversation(activeConversation)}
           onUploadImage={onUploadImage}
           onUpdateGroupConversation={onUpdateGroupConversation}
         />

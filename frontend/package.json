@@ -45,8 +45,19 @@
       "dist-electron/**",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "electron/assets",
+        "to": "assets",
+        "filter": [
+          "mychat-small-normal.ico",
+          "mychat-small-normal.png",
+          "tray.ico"
+        ]
+      }
+    ],
     "win": {
-      "icon": "electron/assets/tray.ico",
+      "icon": "electron/assets/mychat-desktop-anime.ico",
       "target": [
         "portable"
       ]

@@ -13,6 +13,8 @@ interface ConversationDetailPanelProps {
   onToggleMuted: (next: boolean) => void;
   onTogglePinned: (next: boolean) => void;
   onClearMessages: () => void;
+  onLeaveGroup: () => Promise<boolean>;
+  onDismissGroup: () => Promise<boolean>;
   onUploadImage: (file: File) => Promise<string>;
   onUpdateGroupConversation: (
     conversationId: string,
@@ -36,6 +38,8 @@ interface EditableGroupFieldProps {
   hint?: string;
   onSave: (value: string) => Promise<boolean>;
 }
+
+type GroupDangerAction = "leave" | "dismiss";
 
 function memberSubtitle(conversation: Conversation, groupConversation: GroupConversationPayload | null): string {
   if (conversation.type === "private") {
@@ -112,7 +116,7 @@ function EditableGroupField({
       const ok = await onSave(nextValue);
       if (!ok) {
         setDraft(value);
-        setError("保存失败，请重试");
+        setError("保存失败，请稍后重试");
       }
       setEditing(false);
     } finally {
@@ -209,6 +213,8 @@ function ConversationDetailPanel({
   onToggleMuted,
   onTogglePinned,
   onClearMessages,
+  onLeaveGroup,
+  onDismissGroup,
   onUploadImage,
   onUpdateGroupConversation,
 }: ConversationDetailPanelProps) {
@@ -217,6 +223,9 @@ function ConversationDetailPanel({
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [dangerAction, setDangerAction] = useState<GroupDangerAction | null>(null);
+  const [dangerPending, setDangerPending] = useState(false);
+  const [dangerError, setDangerError] = useState("");
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -225,6 +234,9 @@ function ConversationDetailPanel({
     setShowAllMembers(false);
     setAvatarSaving(false);
     setAvatarError("");
+    setDangerAction(null);
+    setDangerPending(false);
+    setDangerError("");
   }, [conversation.id]);
 
   const searchResults = useMemo(() => {
@@ -245,6 +257,7 @@ function ConversationDetailPanel({
   const visibleMembers = showAllMembers ? members : members.slice(0, 8);
   const hasMoreMembers = members.length > visibleMembers.length;
   const canEditGroupProfile = Boolean(groupConversation?.canEditGroupProfile);
+  const isGroupOwner = groupConversation?.myRole === "owner";
   const groupTitle = groupConversation?.name || conversation.title;
   const groupAnnouncement = groupConversation?.announcement || conversation.announcement || "";
 
@@ -274,14 +287,21 @@ function ConversationDetailPanel({
       const url = await onUploadImage(file);
       const updated = await onUpdateGroupConversation(conversation.id, { avatar: url });
       if (!updated) {
-        setAvatarError("保存失败，请重试");
+        setAvatarError("保存失败，请稍后重试");
       }
     } catch (error) {
-      setAvatarError(error instanceof Error ? error.message : "上传失败，请重试");
+      setAvatarError(error instanceof Error ? error.message : "上传失败，请稍后重试");
     } finally {
       setAvatarSaving(false);
     }
   };
+
+  const confirmTitle = dangerAction === "dismiss" ? "解散群聊" : "退出群聊";
+  const confirmDescription =
+    dangerAction === "dismiss"
+      ? "解散后该群聊和聊天记录将被删除，所有成员都无法继续访问。"
+      : "退出后你将不再看到该群聊和聊天记录，其他成员不受影响。";
+  const confirmActionLabel = dangerAction === "dismiss" ? "解散群聊" : "退出群聊";
 
   return (
     <aside className="conversation-detail-panel">
@@ -332,9 +352,7 @@ function ConversationDetailPanel({
         <div className="conversation-detail-member-copy">
           <strong>{isGroup ? groupTitle : conversation.targetName || conversation.title}</strong>
           <span>{memberSubtitle(conversation, groupConversation)}</span>
-          {isGroup ? (
-            <p className="conversation-group-summary-text">{groupAnnouncement || "暂无群公告"}</p>
-          ) : null}
+          {isGroup ? <p className="conversation-group-summary-text">{groupAnnouncement || "暂无群公告"}</p> : null}
           {avatarError ? <p className="conversation-profile-item-error">{avatarError}</p> : null}
         </div>
       </div>
@@ -369,7 +387,7 @@ function ConversationDetailPanel({
             <div className="conversation-group-section">
               <div className="conversation-group-section-head">
                 <strong>群资料</strong>
-                <span>{groupConversation?.myRole === "owner" ? "群主" : "群成员"}</span>
+                <span>{isGroupOwner ? "群主" : "群成员"}</span>
               </div>
               <div className="conversation-group-profile-list">
                 <EditableGroupField
@@ -478,7 +496,73 @@ function ConversationDetailPanel({
             <strong>清空聊天记录</strong>
           </div>
         </button>
+
+        {isGroup ? (
+          <button
+            type="button"
+            className="conversation-detail-row conversation-detail-row-danger-center conversation-detail-danger"
+            onClick={() => {
+              setDangerError("");
+              setDangerAction(isGroupOwner ? "dismiss" : "leave");
+            }}
+          >
+            <div className="conversation-detail-row-main conversation-detail-row-main-centered">
+              <strong>{isGroupOwner ? "解散群聊" : "退出群聊"}</strong>
+            </div>
+          </button>
+        ) : null}
       </div>
+
+      {dangerAction ? (
+        <div className="conversation-danger-mask" onClick={() => (dangerPending ? undefined : setDangerAction(null))}>
+          <div className="conversation-danger-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="conversation-danger-dialog-copy">
+              <strong>{confirmTitle}</strong>
+              <p>{confirmDescription}</p>
+              {dangerError ? <span className="conversation-danger-dialog-error">{dangerError}</span> : null}
+            </div>
+            <div className="conversation-danger-dialog-actions">
+              <button
+                type="button"
+                className="conversation-danger-dialog-button"
+                disabled={dangerPending}
+                onClick={() => {
+                  if (dangerPending) {
+                    return;
+                  }
+                  setDangerAction(null);
+                  setDangerError("");
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="conversation-danger-dialog-button conversation-danger-dialog-button-confirm"
+                disabled={dangerPending}
+                onClick={async () => {
+                  setDangerPending(true);
+                  setDangerError("");
+                  try {
+                    const ok = dangerAction === "dismiss" ? await onDismissGroup() : await onLeaveGroup();
+                    if (ok) {
+                      setDangerAction(null);
+                    } else {
+                      setDangerError("操作失败，请稍后重试");
+                    }
+                  } catch (error) {
+                    setDangerError(error instanceof Error ? error.message : "操作失败，请稍后重试");
+                  } finally {
+                    setDangerPending(false);
+                  }
+                }}
+              >
+                {dangerPending ? "处理中..." : confirmActionLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }
