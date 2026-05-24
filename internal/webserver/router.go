@@ -9,6 +9,7 @@ import (
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
 	"easyChat/internal/database"
+	"easyChat/internal/moments"
 	"easyChat/internal/social"
 	"easyChat/internal/webchat"
 
@@ -17,18 +18,20 @@ import (
 )
 
 type Server struct {
-	Addr   string
-	Hub    *webchat.Hub
-	Auth   *auth.Service
-	Store  *chatstore.Service
-	Social *social.Service
+	Addr            string
+	Hub             *webchat.Hub
+	Auth            *auth.Service
+	Store           *chatstore.Service
+	Social          *social.Service
+	Moments         *moments.Service
+	frontendDistDir string
+	uploadsDir      string
 }
 
 func NewServer(addr string) *Server {
-	dbPath := filepath.FromSlash("data/chat.db")
-	uploadsDir := filepath.FromSlash("uploads")
+	paths := resolveRuntimePaths()
 
-	db, err := database.Open(dbPath)
+	db, err := database.Open(paths.dbPath)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
@@ -40,7 +43,7 @@ func NewServer(addr string) *Server {
 	if err != nil {
 		log.Fatalf("failed to initialize auth service: %v", err)
 	}
-	store, err := chatstore.NewService(db, uploadsDir)
+	store, err := chatstore.NewService(db, paths.uploadsDir)
 	if err != nil {
 		log.Fatalf("failed to initialize chat store: %v", err)
 	}
@@ -50,11 +53,14 @@ func NewServer(addr string) *Server {
 	}
 
 	return &Server{
-		Addr:   addr,
-		Hub:    webchat.NewHub(),
-		Auth:   authService,
-		Store:  store,
-		Social: socialService,
+		Addr:            addr,
+		Hub:             webchat.NewHub(),
+		Auth:            authService,
+		Store:           store,
+		Social:          socialService,
+		Moments:         moments.NewService(db, socialService),
+		frontendDistDir: paths.distDir,
+		uploadsDir:      paths.uploadsDir,
 	}
 }
 
@@ -82,6 +88,7 @@ func (s *Server) registerAPIRoutes(router *gin.Engine) {
 	s.registerFavoriteRoutes(api)
 	s.registerFileRoutes(api)
 	s.registerFriendRoutes(api)
+	s.registerMomentRoutes(api)
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -109,10 +116,10 @@ func bearerToken(c *gin.Context) string {
 }
 
 func (s *Server) registerFrontendRoutes(router *gin.Engine) {
-	distDir := filepath.FromSlash("frontend/dist")
+	distDir := s.frontendDistDir
 	indexPath := filepath.Join(distDir, "index.html")
 	assetsPath := filepath.Join(distDir, "assets")
-	uploadsPath := filepath.FromSlash("uploads")
+	uploadsPath := s.uploadsDir
 
 	if info, err := os.Stat(assetsPath); err == nil && info.IsDir() {
 		router.Static("/assets", assetsPath)
@@ -139,7 +146,7 @@ func (s *Server) registerFrontendRoutes(router *gin.Engine) {
 		c.Data(
 			http.StatusOK,
 			"text/plain; charset=utf-8",
-			[]byte("frontend/dist not found. Run npm install and npm run build in frontend."),
+			[]byte("frontend dist not found. Build the frontend first, or set EASYCHAT_FRONTEND_DIST to the built dist directory."),
 		)
 	})
 }

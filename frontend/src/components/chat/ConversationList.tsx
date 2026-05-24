@@ -1,6 +1,7 @@
 import { MessageCirclePlus, Plus, Search, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Conversation } from "../../types/chat";
+import { formatConversationTime } from "../../utils/time";
 import Avatar from "../common/Avatar";
 import ConversationContextMenu, { type ConversationContextMenuAction } from "./ConversationContextMenu";
 
@@ -228,7 +229,7 @@ function ConversationList({
             <div className="conversation-content">
               <div className="conversation-line">
                 <strong>{item.title}</strong>
-                <span>{item.lastMessageTime?.slice(11, 16) || ""}</span>
+                <span>{item.lastMessageTime ? formatConversationTime(item.lastMessageTime) : ""}</span>
               </div>
               <div className="conversation-line conversation-preview">
                 <span>{item.lastMessage || "暂无消息"}</span>

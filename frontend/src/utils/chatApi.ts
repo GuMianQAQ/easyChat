@@ -9,7 +9,6 @@ import type {
 } from "../types/chat";
 import { createApiError } from "./apiError";
 import { resolveApiUrl } from "../config/env";
-import { summarizeConversationPreview } from "./appHelpers";
 
 async function requestJSON<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   try {
@@ -295,7 +294,7 @@ export function conversationFromPayload(item: ConversationPayload): {
     type: item.type,
     title: item.name,
     avatar: item.avatar || "",
-    lastMessage: summarizeConversationPreview(item.lastMessageType || "text", item.lastMessage || ""),
+    lastMessage: item.lastMessage || "",
     lastMessageType: item.lastMessageType || "text",
     lastMessageTime: item.lastMessageTime || "",
     unreadCount: item.unreadCount || 0,

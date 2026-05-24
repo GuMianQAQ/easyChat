@@ -4,6 +4,7 @@ import {
   FileStack,
   LogOut,
   MessageSquareMore,
+  Rss,
   Settings2,
 } from "lucide-react";
 import type { DockView } from "../../types/chat";
@@ -68,6 +69,14 @@ function LeftDock({
             label="文件"
             active={activeDock === "files"}
             onClick={() => onDockChange("files")}
+          />
+          <IconButton
+            icon={Rss}
+            label="朋友圈"
+            active={false}
+            onClick={() => {
+              window.myChatMoments?.open();
+            }}
           />
           <IconButton
             icon={Settings2}

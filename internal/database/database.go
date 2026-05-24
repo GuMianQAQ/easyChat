@@ -6,6 +6,7 @@ import (
 
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
+	"easyChat/internal/moments"
 	"easyChat/internal/social"
 
 	"github.com/glebarez/sqlite"
@@ -43,5 +44,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&chatstore.Message{},
 		&chatstore.Favorite{},
 		&chatstore.UploadedFile{},
+		&moments.Moment{},
+		&moments.MomentLike{},
+		&moments.MomentComment{},
 	)
 }

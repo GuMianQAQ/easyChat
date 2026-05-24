@@ -31,6 +31,7 @@ type User struct {
 	Gender              string `gorm:"size:16;not null;default:unknown"`
 	Region              string `gorm:"size:64"`
 	Signature           string `gorm:"size:120"`
+	MomentCover         string `gorm:"type:text"`
 	AllowSearch         bool   `gorm:"not null;default:true"`
 	AllowFriendRequest  bool   `gorm:"not null;default:true"`
 	RequireFriendVerify bool   `gorm:"not null;default:true"`
@@ -39,13 +40,14 @@ type User struct {
 }
 
 type PublicUser struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Nickname  string `json:"nickname"`
-	Avatar    string `json:"avatar,omitempty"`
-	Gender    string `json:"gender"`
-	Region    string `json:"region,omitempty"`
-	Signature string `json:"signature,omitempty"`
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	Avatar      string `json:"avatar,omitempty"`
+	Gender      string `json:"gender"`
+	Region      string `json:"region,omitempty"`
+	Signature   string `json:"signature,omitempty"`
+	MomentCover string `json:"momentCover,omitempty"`
 }
 
 type AuthResponse struct {
@@ -69,11 +71,12 @@ type LoginRequest struct {
 }
 
 type UpdateProfileRequest struct {
-	Nickname  *string `json:"nickname"`
-	Avatar    *string `json:"avatar"`
-	Gender    *string `json:"gender"`
-	Region    *string `json:"region"`
-	Signature *string `json:"signature"`
+	Nickname    *string `json:"nickname"`
+	Avatar      *string `json:"avatar"`
+	Gender      *string `json:"gender"`
+	Region      *string `json:"region"`
+	Signature   *string `json:"signature"`
+	MomentCover *string `json:"momentCover"`
 }
 
 type ChangePasswordRequest struct {
@@ -235,6 +238,9 @@ func (s *Service) UpdateProfile(token string, req UpdateProfileRequest) (PublicU
 		}
 		user.Signature = signature
 	}
+	if req.MomentCover != nil {
+		user.MomentCover = strings.TrimSpace(*req.MomentCover)
+	}
 
 	if err := s.db.Save(&user).Error; err != nil {
 		return PublicUser{}, err
@@ -299,13 +305,14 @@ func (s *Service) authResponse(user User) (AuthResponse, error) {
 
 func publicUser(user User) PublicUser {
 	return PublicUser{
-		ID:        user.ID,
-		Username:  user.Username,
-		Nickname:  user.Nickname,
-		Avatar:    user.Avatar,
-		Gender:    safeGender(user.Gender),
-		Region:    user.Region,
-		Signature: user.Signature,
+		ID:          user.ID,
+		Username:    user.Username,
+		Nickname:    user.Nickname,
+		Avatar:      user.Avatar,
+		Gender:      safeGender(user.Gender),
+		Region:      user.Region,
+		Signature:   user.Signature,
+		MomentCover: user.MomentCover,
 	}
 }
 

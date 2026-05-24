@@ -15,7 +15,7 @@ interface MainLayoutProps {
   onLogout: () => void;
 }
 
-const sidebarTitleMap: Record<DockView, string> = {
+const sidebarTitleMap: Partial<Record<DockView, string>> = {
   chat: "会话",
   contacts: "通讯录",
   favorites: "收藏",
@@ -45,7 +45,7 @@ function MainLayout({
         onOpenCurrentProfile={onOpenCurrentProfile}
         onLogout={onLogout}
       />
-      <Sidebar title={sidebarTitleMap[activeDock]}>{sidebarContent}</Sidebar>
+      <Sidebar title={sidebarTitleMap[activeDock] || ""}>{sidebarContent}</Sidebar>
       <section className="main-panel">{mainContent}</section>
     </main>
   );

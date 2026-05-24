@@ -9,7 +9,7 @@ export type ConnectionStatus =
   | "connected"
   | "failed";
 
-export type DockView = "chat" | "contacts" | "favorites" | "files" | "settings";
+export type DockView = "chat" | "contacts" | "favorites" | "files" | "moments" | "settings";
 export type ThemeMode = "light" | "dark" | "system";
 export type ContactPermission = "chat" | "limited";
 export type ContactSource = "self" | "group" | "recent" | "system" | "manual";
@@ -173,6 +173,7 @@ export interface CurrentUser {
   gender: "unknown" | "male" | "female";
   region: string;
   signature: string;
+  momentCover: string;
 }
 
 export interface PrivacySettings {
@@ -189,6 +190,7 @@ export interface UserProfile {
   gender?: "unknown" | "male" | "female";
   region?: string;
   signature?: string;
+  momentCover?: string;
   isSelf: boolean;
   isFriend: boolean;
   requestStatus: FriendRequestStatus;
@@ -327,6 +329,35 @@ export interface UploadedFileItem {
   mimeType: string;
   fileKind: string;
   messageCreatedAt: string;
+  createdAt: string;
+}
+
+export interface MomentItem {
+  id: string;
+  authorId: string;
+  author: MomentAuthor;
+  content: string;
+  images: string[];
+  likeCount: number;
+  likedByMe: boolean;
+  comments: MomentCommentItem[];
+  canDelete: boolean;
+  createdAt: string;
+}
+
+export interface MomentAuthor {
+  id: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+}
+
+export interface MomentCommentItem {
+  id: string;
+  authorId: string;
+  author: MomentAuthor;
+  content: string;
+  canDelete: boolean;
   createdAt: string;
 }
 

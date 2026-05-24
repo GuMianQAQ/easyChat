@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type {
   AuthDraft,
   CurrentUser,
+  DockView,
   PrivacySettings,
   UserSettings,
   ContactItem,
@@ -36,7 +37,7 @@ interface CreateAuthActionsOptions {
   setConversations: Dispatch<SetStateAction<Conversation[]>>;
   setFavoriteItems: Dispatch<SetStateAction<FavoriteItem[]>>;
   setSelectedFiles: Dispatch<SetStateAction<FileRecord[]>>;
-  setActiveDock: Dispatch<SetStateAction<"chat" | "contacts" | "favorites" | "files" | "settings">>;
+  setActiveDock: Dispatch<SetStateAction<DockView>>;
   setActiveConversationId: Dispatch<SetStateAction<string>>;
   setSelectedContactId: Dispatch<SetStateAction<string>>;
   setFavoriteKeyword: Dispatch<SetStateAction<string>>;

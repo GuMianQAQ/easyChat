@@ -68,7 +68,7 @@ export async function fetchCurrentUser(token: string): Promise<CurrentUser> {
 
 export async function updateProfile(
   token: string,
-  payload: Partial<Pick<CurrentUser, "nickname" | "avatar" | "gender" | "region" | "signature">>,
+  payload: Partial<Pick<CurrentUser, "nickname" | "avatar" | "gender" | "region" | "signature" | "momentCover">>,
 ): Promise<CurrentUser> {
   const response = await requestJSON<{ user: CurrentUser }>("/api/users/me/profile", {
     method: "PUT",

@@ -5,11 +5,17 @@ import type {
   ContactItem,
   Conversation,
   CurrentUser,
+  DockView,
   GroupConversationPayload,
   FavoriteItem,
   MessageQuote,
   NotificationItem,
 } from "../types/chat";
+import {
+  clearConversationUnread,
+  reconcileRemoteConversationState,
+  removeConversationLocally,
+} from "../utils/conversationListState";
 import {
   clearConversationMessages,
   conversationFromPayload,
@@ -27,7 +33,12 @@ import {
   updateGroupConversation,
   uploadImage,
 } from "../utils/chatApi";
-import { DEFAULT_AUTH_DRAFT, createBaseContacts, mergeRemoteConversations, sortConversations, upsertConversation } from "../utils/appHelpers";
+import {
+  DEFAULT_AUTH_DRAFT,
+  createBaseContacts,
+  sortConversations,
+  upsertConversation,
+} from "../utils/appHelpers";
 import { isAuthExpiredError } from "../utils/apiError";
 import { captureDisplayFrame, dataUrlToBlob } from "../utils/media";
 
@@ -39,21 +50,31 @@ type HistoryState = Record<
 interface CreateConversationActionsOptions {
   storedToken: string;
   currentUser: CurrentUser | null;
-  activeConversationId: string;
-  conversations: Conversation[];
-  visibleActiveConversation: Conversation;
-  favoriteItems: FavoriteItem[];
-  historyState: HistoryState;
-  setActiveDock: Dispatch<SetStateAction<"chat" | "contacts" | "favorites" | "files" | "settings">>;
-  setActiveConversationId: Dispatch<SetStateAction<string>>;
-  setConversations: Dispatch<SetStateAction<Conversation[]>>;
-  setHistoryState: Dispatch<SetStateAction<HistoryState>>;
-  setFavoriteItems: Dispatch<SetStateAction<FavoriteItem[]>>;
-  setFavoriteJumpMessageId: Dispatch<SetStateAction<string>>;
-  setStoredContacts: Dispatch<SetStateAction<ContactItem[]>>;
-  setSelectedContactId: Dispatch<SetStateAction<string>>;
-  setAuthDraft: Dispatch<SetStateAction<AuthDraft>>;
-  removeStoredAuthDraft: () => void;
+  chatState: {
+    activeConversationId: string;
+    conversations: Conversation[];
+    visibleActiveConversation: Conversation;
+    historyState: HistoryState;
+  };
+  chatStateActions: {
+    setActiveDock: Dispatch<SetStateAction<DockView>>;
+    setActiveConversationId: Dispatch<SetStateAction<string>>;
+    setConversations: Dispatch<SetStateAction<Conversation[]>>;
+    setHistoryState: Dispatch<SetStateAction<HistoryState>>;
+  };
+  favoriteState: {
+    favoriteItems: FavoriteItem[];
+  };
+  favoriteActions: {
+    setFavoriteItems: Dispatch<SetStateAction<FavoriteItem[]>>;
+    setFavoriteJumpMessageId: Dispatch<SetStateAction<string>>;
+  };
+  localDataActions: {
+    setStoredContacts: Dispatch<SetStateAction<ContactItem[]>>;
+    setSelectedContactId: Dispatch<SetStateAction<string>>;
+    setAuthDraft: Dispatch<SetStateAction<AuthDraft>>;
+    removeStoredAuthDraft: () => void;
+  };
   handleAuthExpired: () => void;
   refreshConversations: (token: string) => Promise<void>;
   replaceConversationMessages: (conversationId: string, items: import("../types/chat").ServerMessage[]) => void;
@@ -85,21 +106,11 @@ interface CreateConversationActionsOptions {
 export function createConversationActions({
   storedToken,
   currentUser,
-  activeConversationId,
-  conversations,
-  visibleActiveConversation,
-  favoriteItems,
-  historyState,
-  setActiveDock,
-  setActiveConversationId,
-  setConversations,
-  setHistoryState,
-  setFavoriteItems,
-  setFavoriteJumpMessageId,
-  setStoredContacts,
-  setSelectedContactId,
-  setAuthDraft,
-  removeStoredAuthDraft,
+  chatState,
+  chatStateActions,
+  favoriteState,
+  favoriteActions,
+  localDataActions,
   handleAuthExpired,
   refreshConversations,
   replaceConversationMessages,
@@ -108,6 +119,13 @@ export function createConversationActions({
   sendImageMessage,
   addSystemNotice,
 }: CreateConversationActionsOptions) {
+  const { activeConversationId, conversations, visibleActiveConversation, historyState } = chatState;
+  const { setActiveDock, setActiveConversationId, setConversations, setHistoryState } =
+    chatStateActions;
+  const { favoriteItems } = favoriteState;
+  const { setFavoriteItems, setFavoriteJumpMessageId } = favoriteActions;
+  const { setStoredContacts, setSelectedContactId, setAuthDraft, removeStoredAuthDraft } =
+    localDataActions;
   const handleAuthError = (error: unknown) => {
     if (isAuthExpiredError(error)) {
       handleAuthExpired();
@@ -174,11 +192,7 @@ export function createConversationActions({
   };
 
   const handleMarkConversationRead = async (conversationId: string) => {
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
-      ),
-    );
+    setConversations((previous) => clearConversationUnread(previous, conversationId));
 
     if (!storedToken) {
       return;
@@ -202,11 +216,7 @@ export function createConversationActions({
   const openConversation = (conversationId: string) => {
     setActiveDock("chat");
     setActiveConversationId(conversationId);
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation,
-      ),
-    );
+    setConversations((previous) => clearConversationUnread(previous, conversationId));
     if (storedToken) {
       void handleMarkConversationRead(conversationId);
     }
@@ -447,7 +457,7 @@ export function createConversationActions({
     try {
       await deleteConversation(storedToken, conversation.id);
       const remoteItems = (await fetchConversations(storedToken)).map((item) => conversationFromPayload(item));
-      const nextConversations = mergeRemoteConversations(conversations, remoteItems);
+      const nextConversations = reconcileRemoteConversationState(conversations, remoteItems);
       setConversations(nextConversations);
 
       if (activeConversationId === conversation.id) {
@@ -468,7 +478,7 @@ export function createConversationActions({
   };
 
   const applyRemovedConversation = (removedConversationId: string, nextConversations: Conversation[]) => {
-    setConversations(nextConversations);
+    setConversations(removeConversationLocally(nextConversations, removedConversationId));
     setFavoriteItems((previous) => previous.filter((item) => item.conversationId !== removedConversationId));
     replaceConversationMessages(removedConversationId, []);
     setHistoryState((previous) => {
@@ -491,7 +501,7 @@ export function createConversationActions({
     try {
       await leaveGroupConversation(storedToken, conversation.id);
       const remoteItems = (await fetchConversations(storedToken)).map((item) => conversationFromPayload(item));
-      const nextConversations = mergeRemoteConversations(conversations, remoteItems);
+      const nextConversations = reconcileRemoteConversationState(conversations, remoteItems);
       applyRemovedConversation(conversation.id, nextConversations);
       addSystemNotice({
         eventType: `group-leave-${conversation.id}`,
@@ -523,7 +533,7 @@ export function createConversationActions({
     try {
       await dismissGroupConversation(storedToken, conversation.id);
       const remoteItems = (await fetchConversations(storedToken)).map((item) => conversationFromPayload(item));
-      const nextConversations = mergeRemoteConversations(conversations, remoteItems);
+      const nextConversations = reconcileRemoteConversationState(conversations, remoteItems);
       applyRemovedConversation(conversation.id, nextConversations);
       addSystemNotice({
         eventType: `group-dismiss-${conversation.id}`,

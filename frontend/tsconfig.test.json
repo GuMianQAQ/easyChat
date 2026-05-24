@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": ".test-dist",
+    "rootDir": "src",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/types/chat.ts",
+    "src/utils/appHelpers.ts",
+    "src/utils/conversationListState.ts",
+    "src/utils/conversationState.ts",
+    "src/utils/desktopAttention.ts",
+    "src/utils/appHelpers.test.ts",
+    "src/utils/conversationListState.test.ts",
+    "src/utils/conversationState.test.ts",
+    "src/utils/desktopAttention.test.ts"
+  ]
+}

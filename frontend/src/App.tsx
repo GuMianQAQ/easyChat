@@ -2,6 +2,8 @@
 import AuthScreen from "./components/app/AuthScreen";
 import AppShell from "./components/app/AppShell";
 import AvatarPreviewModal from "./components/common/AvatarPreviewModal";
+import MomentsWindow from "./components/moments/MomentsWindow";
+import { useDesktopAttention } from "./hooks/useDesktopAttention";
 import { useChatSocket } from "./hooks/useChatSocket";
 import { useConversationDrafts } from "./hooks/useConversationDrafts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -34,6 +36,12 @@ import {
   fetchFriends,
   fetchPrivacySettings,
 } from "./utils/friendsApi";
+
+import {
+  applyIncomingConversationMessage,
+  applyIncomingSystemNotice,
+  isConversationActivelyVisible,
+} from "./utils/conversationState";
 import {
   createBaseContacts,
   DEFAULT_AUTH_DRAFT,
@@ -43,21 +51,23 @@ import {
   mapFriendToContact,
   mapConversationToContact,
   mergeContacts,
-  mergeRemoteConversations,
   quoteFromMessage,
   resolveConversationView,
   sanitizeAuthDraft,
   sortConversations,
-  summarizeMessage,
   summarizeDraftPreview,
-  upsertConversation,
 } from "./utils/appHelpers";
+import {
+  applyGroupConversationSummary,
+  reconcileRemoteConversationState,
+} from "./utils/conversationListState";
 import { createAuthActions } from "./app/createAuthActions";
-import { createSocialActions } from "./app/createSocialActions";
 import { createConversationActions } from "./app/createConversationActions";
+import { createSocialActions } from "./app/createSocialActions";
 import "./styles/global.css";
 import "./styles/login.css";
 import "./styles/chat.css";
+import "./styles/moments.css";
 
 const APP_NAME = "MyChat";
 
@@ -109,12 +119,11 @@ function App() {
   const [profileCard, setProfileCard] = useState<{ profile: UserProfile; x: number; y: number } | null>(null);
   const [avatarPreviewSrc, setAvatarPreviewSrc] = useState("");
 
-  const activeDockRef = useRef(activeDock);
-  const activeConversationRef = useRef(activeConversationId);
   const { drafts, setDraft, clearAllDrafts } = useConversationDrafts(currentUser?.id ?? null);
   const processedMessageRef = useRef("");
   const processedNoticeRef = useRef("");
   const lastRequestCountRef = useRef(0);
+  const isDesktopRuntime = Boolean(window.myChatDesktop && window.myChatWindow);
 
   const {
     status,
@@ -136,14 +145,20 @@ function App() {
     resetSession,
     addSystemNotice,
   } = useChatSocket();
-
-  useEffect(() => {
-    activeDockRef.current = activeDock;
-  }, [activeDock]);
-
-  useEffect(() => {
-    activeConversationRef.current = activeConversationId;
-  }, [activeConversationId]);
+  const { syncIncomingAttention } = useDesktopAttention({
+    activeConversationId,
+    activeDock,
+    conversations,
+    enabled: isDesktopRuntime,
+    friends,
+    onAttentionOpenConversation: ({ conversationId, activeDock: nextDock }) => {
+      if (!conversationId) {
+        return;
+      }
+      setActiveDock(nextDock);
+      setActiveConversationId(conversationId);
+    },
+  });
 
   useEffect(() => {
     const theme =
@@ -265,6 +280,8 @@ function App() {
   }, [currentUser, currentUserId, messages, setStoredContacts]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const latestMessage = messages[messages.length - 1];
     if (!latestMessage || latestMessage.id === processedMessageRef.current) {
       return;
@@ -286,59 +303,53 @@ function App() {
         ? conversations.find((conversation) => conversation.id === conversationId)?.title || "群聊"
         : "系统通知";
 
-    const isOpen =
-      !document.hidden &&
-      activeDockRef.current === "chat" &&
-      activeConversationRef.current === conversationId;
+    const isCurrentConversationOpen =
+      activeDock === "chat" && activeConversationId === conversationId;
+    const browserThinksVisibleAndFocused = !document.hidden && document.hasFocus();
+    const isOpen = isConversationActivelyVisible(
+      {
+        activeConversationId,
+        activeDock,
+        isWindowVisibleFocused: browserThinksVisibleAndFocused,
+      },
+      conversationId,
+    );
+
+    if (isDesktopRuntime && latestMessage.type === "chat" && !latestMessage.isSelf) {
+      void (async () => {
+        await syncIncomingAttention(latestMessage, {
+          browserVisibleAndFocused: browserThinksVisibleAndFocused,
+          isCurrentConversationOpen,
+        });
+        if (cancelled) {
+          return;
+        }
+      })();
+    }
 
     if (latestMessage.type === "chat" && !latestMessage.isSelf && isOpen && storedToken) {
       void handleMarkConversationRead(conversationId);
     }
 
-    setConversations((previous) => {
-      const current =
-        previous.find((conversation) => conversation.id === conversationId) ||
-        ({
-          id: conversationId,
-          type: isPrivate ? "private" : isGroup ? "group" : "system",
-          title,
-          unreadCount: 0,
-          targetUserId: isPrivate
-            ? latestMessage.isSelf
-              ? latestMessage.targetUserId
-              : latestMessage.senderId
-            : undefined,
-          targetName: isPrivate
-            ? latestMessage.isSelf
-              ? latestMessage.targetName
-              : latestMessage.senderName
-            : undefined,
-        } satisfies Conversation);
-
-      const next: Conversation = {
-        ...current,
+    setConversations((previous) =>
+      applyIncomingConversationMessage(previous, latestMessage, {
+        isConversationVisible: isOpen,
         title,
-        avatar:
-          isPrivate
-              ? latestMessage.isSelf
-                ? current.avatar || current.targetAvatar || ""
-                : latestMessage.avatar || current.avatar || ""
-              : isGroup
-                ? current.avatar || ""
-                : current.avatar || "",
-        lastMessage: summarizeMessage(latestMessage),
-        lastMessageTime: latestMessage.createdAt,
-        unreadCount: latestMessage.isSelf || isOpen ? 0 : current.unreadCount + 1,
-        targetUserId: current.targetUserId,
-        targetUsername: current.targetUsername,
-        targetNickname: current.targetNickname,
-        targetAvatar: current.targetAvatar,
-        targetName: current.targetName,
-      };
+      }),
+    );
 
-      return sortConversations(upsertConversation(previous, next));
-    });
-  }, [messages, storedToken]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeConversationId,
+    activeDock,
+    conversations,
+    isDesktopRuntime,
+    messages,
+    storedToken,
+    syncIncomingAttention,
+  ]);
 
   useEffect(() => {
     const latestNotice = notifications[0];
@@ -348,36 +359,14 @@ function App() {
     processedNoticeRef.current = latestNotice.id;
 
     const isOpen =
-      !document.hidden &&
-      activeDockRef.current === "chat" &&
-      activeConversationRef.current === "system";
+      !document.hidden && activeDock === "chat" && activeConversationId === "system";
 
-    setConversations((previous) => {
-      const current =
-        previous.find((conversation) => conversation.id === "system") ||
-        ({ id: "system", type: "system", title: "系统通知", unreadCount: 0 } satisfies Conversation);
-
-      return sortConversations(
-        upsertConversation(previous, {
-          ...current,
-          lastMessage: latestNotice.content,
-          lastMessageTime: latestNotice.time,
-          unreadCount: isOpen ? 0 : current.unreadCount + 1,
-        }),
-      );
-    });
-  }, [notifications]);
-
-  useEffect(() => {
-    if (activeDock !== "chat") {
-      return;
-    }
     setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === activeConversationId ? { ...conversation, unreadCount: 0 } : conversation,
-      ),
+      applyIncomingSystemNotice(previous, latestNotice, {
+        isConversationVisible: isOpen,
+      }),
     );
-  }, [activeConversationId, activeDock]);
+  }, [activeConversationId, activeDock, notifications]);
 
   useEffect(() => {
     if (activeDock !== "chat" || !activeConversationId || activeConversationId === "system") {
@@ -404,8 +393,12 @@ function App() {
   );
 
   useEffect(() => {
+    if (isDesktopRuntime) {
+      document.title = APP_NAME;
+      return;
+    }
     document.title = totalUnread > 0 ? `(${totalUnread}) ${APP_NAME}` : APP_NAME;
-  }, [totalUnread]);
+  }, [isDesktopRuntime, totalUnread]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -564,18 +557,7 @@ function App() {
 
     setGroupConversation(updated);
     setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === conversationId
-          ? {
-              ...conversation,
-              title: updated.name,
-              avatar: updated.avatar,
-              announcement: updated.announcement,
-              memberCount: updated.memberCount,
-              muted: updated.isMuted,
-            }
-          : conversation,
-      ),
+      applyGroupConversationSummary(previous, conversationId, updated),
     );
 
     if (patch.myNickname !== undefined && currentUser) {
@@ -643,7 +625,7 @@ function App() {
   const refreshConversations = async (token: string) => {
     const remote = await fetchConversations(token);
     setConversations((previous) =>
-      mergeRemoteConversations(
+      reconcileRemoteConversationState(
         previous,
         remote.map((item) => conversationFromPayload(item)),
       ),
@@ -769,21 +751,31 @@ function App() {
   } = createConversationActions({
     storedToken,
     currentUser,
-    activeConversationId,
-    conversations,
-    visibleActiveConversation,
-    favoriteItems,
-    historyState,
-    setActiveDock,
-    setActiveConversationId,
-    setConversations,
-    setHistoryState,
-    setFavoriteItems,
-    setFavoriteJumpMessageId,
-    setStoredContacts,
-    setSelectedContactId,
-    setAuthDraft,
-    removeStoredAuthDraft,
+    chatState: {
+      activeConversationId,
+      conversations,
+      visibleActiveConversation,
+      historyState,
+    },
+    chatStateActions: {
+      setActiveDock,
+      setActiveConversationId,
+      setConversations,
+      setHistoryState,
+    },
+    favoriteState: {
+      favoriteItems,
+    },
+    favoriteActions: {
+      setFavoriteItems,
+      setFavoriteJumpMessageId,
+    },
+    localDataActions: {
+      setStoredContacts,
+      setSelectedContactId,
+      setAuthDraft,
+      removeStoredAuthDraft,
+    },
     handleAuthExpired,
     refreshConversations,
     replaceConversationMessages,
@@ -792,6 +784,27 @@ function App() {
     sendImageMessage,
     addSystemNotice,
   });
+
+  useEffect(() => {
+    if (activeDock !== "chat" || !activeConversationId || !storedToken) {
+      return;
+    }
+
+    const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId);
+    if (!activeConversation || activeConversation.unreadCount <= 0) {
+      return;
+    }
+    if (document.hidden || !document.hasFocus()) {
+      return;
+    }
+
+    void handleMarkConversationRead(activeConversationId);
+  }, [activeConversationId, activeDock, conversations, storedToken]);
+
+  // Standalone Moments window — render self-contained page
+  if (window.myChatMoments?.isMomentsWindow) {
+    return <MomentsWindow />;
+  }
 
   if (!authReady) {
     return null;
@@ -829,190 +842,214 @@ function App() {
   return (
     <>
       <AppShell
-      activeDock={activeDock}
-      onDockChange={setActiveDock}
-      currentUser={currentUser}
-      totalUnread={totalUnread}
-      visibleConversations={visibleConversationsWithDrafts}
-      activeConversationId={activeConversationId}
-      contactItems={contactItems}
-      starredContacts={starredContacts}
-      selectedContactId={selectedContactId}
-      contactsManagementOpen={contactsManagementOpen}
-      requestCount={requestCount}
-      filteredFavorites={filteredFavorites}
-      favoriteItems={favoriteItems}
-      favoriteType={favoriteType}
-      favoriteKeyword={favoriteKeyword}
-      onFavoriteTypeChange={setFavoriteType}
-      onFavoriteKeywordChange={setFavoriteKeyword}
-      selectedFiles={selectedFiles}
-      visibleActiveConversation={visibleActiveConversation}
-      status={status}
-      activeMessages={activeMessages}
-      activeHasMore={activeHistory?.hasMore ?? false}
-      activeLoadingMore={activeHistory?.loading ?? false}
-      draftContent={currentConversationDraft}
-      notifications={notifications}
-      groupConversation={groupConversation}
-      favoriteIds={favoriteIds}
-      favoriteJumpMessageId={favoriteJumpMessageId}
-      enterToSend={storedSettings.enterToSend}
-      clearAfterSend={storedSettings.clearAfterSend}
-      composerDisabledReason={activePrivateDisabledReason}
-      friends={friends}
-      friendRequests={friendRequests}
-      selectedContact={selectedContact}
-      privacySettings={privacySettings}
-      blockedFriends={blockedFriends}
-      roomName={roomName}
-      friendPanelOpen={friendPanelOpen}
-      createGroupPanelOpen={createGroupPanelOpen}
-      friendSearchResult={friendSearchResult}
-      friendSearching={friendSearching}
-      friendSubmitting={friendSubmitting}
-      friendSearchError={friendSearchError}
-      profileCard={profileCard}
-      onConversationChange={openConversation}
-      onOpenAddFriend={() => {
-        setFriendPanelOpen(true);
-        setCreateGroupPanelOpen(false);
-      }}
-      onOpenCreateGroup={() => {
-        setCreateGroupPanelOpen(true);
-        setFriendPanelOpen(false);
-      }}
-      onTogglePinned={(conversation, next) => void handleUpdateConversationSettings(conversation.id, { isPinned: next })}
-      onMarkRead={(conversation) => void handleMarkConversationRead(conversation.id)}
-      onToggleMuted={(conversation, next) => void handleUpdateConversationSettings(conversation.id, { isMuted: next })}
-      onDeleteConversation={(conversation) => void handleDeleteConversation(conversation, true)}
-      onHideConversation={(conversation) => void handleDeleteConversation(conversation, false)}
-      onSelectContact={setSelectedContactId}
-      onOpenContactsManagement={() => setContactsManagementOpen(true)}
-      onOpenContactRequests={() => {
-        setSelectedContactId("");
-        setContactsManagementOpen(false);
-      }}
-      onOpenProfileCard={(userId, x, y) => void handleOpenProfileCard(userId, { x, y })}
-      onOpenCurrentUserProfile={(x, y) => {
-        if (!currentUser) {
-          return;
+        activeDock={activeDock}
+        onDockChange={setActiveDock}
+        currentUser={currentUser}
+        totalUnread={totalUnread}
+        chatState={{
+          visibleConversations: visibleConversationsWithDrafts,
+          activeConversationId,
+          visibleActiveConversation,
+          status,
+          activeMessages,
+          activeHasMore: activeHistory?.hasMore ?? false,
+          activeLoadingMore: activeHistory?.loading ?? false,
+          notifications,
+          groupConversation,
+          favoriteIds,
+          favoriteJumpMessageId,
+          enterToSend: storedSettings.enterToSend,
+          clearAfterSend: storedSettings.clearAfterSend,
+          composerDisabledReason: activePrivateDisabledReason,
+          draftContent: currentConversationDraft,
+        }}
+        chatActions={{
+          onConversationChange: openConversation,
+          onOpenAddFriend: () => {
+            setFriendPanelOpen(true);
+            setCreateGroupPanelOpen(false);
+          },
+          onOpenCreateGroup: () => {
+            setCreateGroupPanelOpen(true);
+            setFriendPanelOpen(false);
+          },
+          onTogglePinned: (conversation, next) =>
+            void handleUpdateConversationSettings(conversation.id, { isPinned: next }),
+          onMarkRead: (conversation) => void handleMarkConversationRead(conversation.id),
+          onToggleMuted: (conversation, next) =>
+            void handleUpdateConversationSettings(conversation.id, { isMuted: next }),
+          onDeleteConversation: (conversation) =>
+            void handleDeleteConversation(conversation, true),
+          onHideConversation: (conversation) =>
+            void handleDeleteConversation(conversation, false),
+          onUploadImage: (file) => {
+            if (!storedToken) {
+              return Promise.reject(new Error("未登录"));
+            }
+            return uploadImage(storedToken, file);
+          },
+          onSendText: handleSendText,
+          onSendImage: handleSendImage,
+          onCaptureScreen: handleCaptureScreen,
+          onDraftChange: (value) => setDraft(activeConversationId, value),
+          onLoadMore: () => {
+            if (!activeHistory?.hasMore || activeHistory.loading) {
+              return;
+            }
+            void loadConversationHistory(activeConversationId, (activeHistory.page || 1) + 1);
+          },
+          onRetry: retryMessage,
+          onRevoke: (message) =>
+            revokeMessage({
+              messageId: message.id,
+              conversationId: message.conversationId,
+              messageScope:
+                message.messageScope === "private" ? "private" : "group",
+              targetUserId: message.targetUserId,
+            }),
+          onDeleteLocal: removeLocalMessage,
+          onToggleFavoriteMessage: toggleFavorite,
+          onCopyMessage: handleCopyMessage,
+          onCreateQuote: quoteFromMessage,
+          onNotice: (title, content, level) =>
+            addSystemNotice({
+              eventType: `ui-${title}-${content}`,
+              title,
+              content,
+              level,
+            }),
+          onJumpHandled: () => setFavoriteJumpMessageId(""),
+          onToggleActiveConversationPinned: (next) =>
+            void handleUpdateConversationSettings(visibleActiveConversation.id, {
+              isPinned: next,
+            }),
+          onToggleActiveConversationMuted: (next) => {
+            if (visibleActiveConversation.type === "group") {
+              setGroupConversation((previous) =>
+                previous ? { ...previous, isMuted: next } : previous,
+              );
+            }
+            void handleUpdateConversationSettings(visibleActiveConversation.id, {
+              isMuted: next,
+            });
+          },
+          onClearConversation: () => void handleClearConversation(),
+          onLeaveGroupConversation: (conversation) =>
+            handleLeaveGroupConversation(conversation),
+          onDismissGroupConversation: (conversation) =>
+            handleDismissGroupConversation(conversation),
+          onUpdateGroupConversation: handleUpdateGroupConversation,
+        }}
+        contactItems={contactItems}
+        starredContacts={starredContacts}
+        selectedContactId={selectedContactId}
+        contactsManagementOpen={contactsManagementOpen}
+        requestCount={requestCount}
+        filteredFavorites={filteredFavorites}
+        favoriteItems={favoriteItems}
+        favoriteType={favoriteType}
+        favoriteKeyword={favoriteKeyword}
+        onFavoriteTypeChange={setFavoriteType}
+        onFavoriteKeywordChange={setFavoriteKeyword}
+        selectedFiles={selectedFiles}
+        friends={friends}
+        friendRequests={friendRequests}
+        selectedContact={selectedContact}
+        privacySettings={privacySettings}
+        blockedFriends={blockedFriends}
+        roomName={roomName}
+        friendPanelOpen={friendPanelOpen}
+        createGroupPanelOpen={createGroupPanelOpen}
+        friendSearchResult={friendSearchResult}
+        friendSearching={friendSearching}
+        friendSubmitting={friendSubmitting}
+        friendSearchError={friendSearchError}
+        profileCard={profileCard}
+        onSelectContact={setSelectedContactId}
+        onOpenContactsManagement={() => setContactsManagementOpen(true)}
+        onOpenContactRequests={() => {
+          setSelectedContactId("");
+          setContactsManagementOpen(false);
+        }}
+        onOpenProfileCard={(userId, x, y) => void handleOpenProfileCard(userId, { x, y })}
+        onOpenCurrentUserProfile={(x, y) => {
+          if (!currentUser) {
+            return;
+          }
+          setProfileCard({ profile: currentUserToProfile(currentUser), x, y });
+        }}
+        onOpenAvatarPreview={(src) => setAvatarPreviewSrc(src)}
+        onCloseContactsManagement={() => setContactsManagementOpen(false)}
+        onOpenChatFromContact={handleOpenContactChat}
+        onUpdateContact={handleUpdateContact}
+        onSetContactPermission={handleSetContactPermission}
+        onAcceptRequest={(requestId) => void handleAcceptFriendRequest(requestId)}
+        onRejectRequest={(requestId) => void handleRejectFriendRequest(requestId)}
+        onDeleteFriend={(friendId) => void handleDeleteFriend(friendId)}
+        onToggleBlock={(friendId, nextBlocked) =>
+          void handleToggleBlockFriend(friendId, nextBlocked)}
+        onRemoveFavorite={(id) => void removeFavorite(id)}
+        onOpenFavorite={openFavorite}
+        onPickFiles={setSelectedFiles}
+        settings={storedSettings}
+        onSettingsChange={setStoredSettings}
+        onPrivacyChange={(next) => void handlePrivacyChange(next)}
+        onProfileUpdate={handleProfileUpdate}
+        onChangePassword={(oldPassword, newPassword, confirmPassword) =>
+          handleChangePassword({ oldPassword, newPassword, confirmPassword })
         }
-        setProfileCard({ profile: currentUserToProfile(currentUser), x, y });
-      }}
-      onOpenAvatarPreview={(src) => setAvatarPreviewSrc(src)}
-      onUploadImage={(file) => {
-        if (!storedToken) {
-          return Promise.reject(new Error("未登录"));
+        onAvatarPick={handleAvatarPick}
+        onResetAvatar={handleResetAvatar}
+        onClearFavorites={clearFavorites}
+        onClearContacts={clearContacts}
+        onClearLoginCache={clearLoginCache}
+        onUnblockFriend={(friendId) => void handleToggleBlockFriend(friendId, false)}
+        onLogout={handleLogout}
+        onCloseAddFriend={() => setFriendPanelOpen(false)}
+        onCloseCreateGroup={() => setCreateGroupPanelOpen(false)}
+        onCreateGroupConversation={handleCreateGroupConversation}
+        onSearchFriend={(username) => void handleFriendSearch(username)}
+        onSendFriendRequest={(message) => void handleSendFriendRequest(message)}
+        onAcceptProfileRequest={(profile) => {
+          const request =
+            friendRequests.find((item) => item.id === profile.requestId) ??
+            friendRequests.find(
+              (item) =>
+                item.direction === "received" &&
+                item.user.id === profile.id &&
+                item.status === "pending",
+            );
+          if (request) {
+            void handleAcceptFriendRequest(request.id);
+          }
+        }}
+        onOpenProfileFromPanel={(profile, x, y) => {
+          setProfileCard({ profile, x, y });
+        }}
+        onOpenChatFromProfile={(profile) =>
+          void handleOpenContactChat({
+            id: profile.id,
+            name: profile.nickname,
+            avatar: profile.avatar,
+            username: profile.username,
+            gender: profile.gender,
+            region: profile.region,
+            signature: profile.signature,
+            source: profile.isFriend ? "manual" : "recent",
+            permission: "chat",
+          })
         }
-        return uploadImage(storedToken, file);
-      }}
-      onSendText={handleSendText}
-      onSendImage={handleSendImage}
-      onCaptureScreen={handleCaptureScreen}
-      onDraftChange={(value) => setDraft(activeConversationId, value)}
-      onLoadMore={() => {
-        if (!activeHistory?.hasMore || activeHistory.loading) {
-          return;
-        }
-        void loadConversationHistory(activeConversationId, (activeHistory.page || 1) + 1);
-      }}
-      onRetry={retryMessage}
-      onRevoke={(message) =>
-      revokeMessage({
-        messageId: message.id,
-        conversationId: message.conversationId,
-        messageScope: message.messageScope === "private" ? "private" : "group",
-        targetUserId: message.targetUserId,
-      })
-      }
-      onDeleteLocal={removeLocalMessage}
-      onToggleFavoriteMessage={toggleFavorite}
-      onCopyMessage={handleCopyMessage}
-      onCreateQuote={quoteFromMessage}
-      onNotice={(title, content, level) =>
-        addSystemNotice({ eventType: `ui-${title}-${content}`, title, content, level })
-      }
-      onJumpHandled={() => setFavoriteJumpMessageId("")}
-      onToggleActiveConversationPinned={(next) =>
-        void handleUpdateConversationSettings(visibleActiveConversation.id, { isPinned: next })
-      }
-      onToggleActiveConversationMuted={(next) => {
-        if (visibleActiveConversation.type === "group") {
-          setGroupConversation((previous) => (previous ? { ...previous, isMuted: next } : previous));
-        }
-        void handleUpdateConversationSettings(visibleActiveConversation.id, { isMuted: next });
-      }}
-      onClearConversation={() => void handleClearConversation()}
-      onLeaveGroupConversation={(conversation) => handleLeaveGroupConversation(conversation)}
-      onDismissGroupConversation={(conversation) => handleDismissGroupConversation(conversation)}
-      onCloseContactsManagement={() => setContactsManagementOpen(false)}
-      onOpenChatFromContact={handleOpenContactChat}
-      onUpdateContact={handleUpdateContact}
-      onSetContactPermission={handleSetContactPermission}
-      onAcceptRequest={(requestId) => void handleAcceptFriendRequest(requestId)}
-      onRejectRequest={(requestId) => void handleRejectFriendRequest(requestId)}
-      onDeleteFriend={(friendId) => void handleDeleteFriend(friendId)}
-      onToggleBlock={(friendId, nextBlocked) => void handleToggleBlockFriend(friendId, nextBlocked)}
-      onRemoveFavorite={(id) => void removeFavorite(id)}
-      onOpenFavorite={openFavorite}
-      onPickFiles={setSelectedFiles}
-      settings={storedSettings}
-      onSettingsChange={setStoredSettings}
-      onPrivacyChange={(next) => void handlePrivacyChange(next)}
-      onProfileUpdate={handleProfileUpdate}
-      onChangePassword={(oldPassword, newPassword, confirmPassword) =>
-        handleChangePassword({ oldPassword, newPassword, confirmPassword })
-      }
-      onAvatarPick={handleAvatarPick}
-      onResetAvatar={handleResetAvatar}
-      onClearFavorites={clearFavorites}
-      onClearContacts={clearContacts}
-      onClearLoginCache={clearLoginCache}
-      onUnblockFriend={(friendId) => void handleToggleBlockFriend(friendId, false)}
-      onLogout={handleLogout}
-      onCloseAddFriend={() => setFriendPanelOpen(false)}
-      onCloseCreateGroup={() => setCreateGroupPanelOpen(false)}
-      onCreateGroupConversation={handleCreateGroupConversation}
-      onUpdateGroupConversation={handleUpdateGroupConversation}
-      onSearchFriend={(username) => void handleFriendSearch(username)}
-      onSendFriendRequest={(message) => void handleSendFriendRequest(message)}
-      onAcceptProfileRequest={(profile) => {
-        const request =
-          friendRequests.find((item) => item.id === profile.requestId) ??
-          friendRequests.find(
-            (item) => item.direction === "received" && item.user.id === profile.id && item.status === "pending",
-          );
-        if (request) {
-          void handleAcceptFriendRequest(request.id);
-        }
-      }}
-      onOpenProfileFromPanel={(profile, x, y) => {
-        setProfileCard({ profile, x, y });
-      }}
-      onOpenChatFromProfile={(profile) =>
-        void handleOpenContactChat({
-          id: profile.id,
-          name: profile.nickname,
-          avatar: profile.avatar,
-          username: profile.username,
-          gender: profile.gender,
-          region: profile.region,
-          signature: profile.signature,
-          source: profile.isFriend ? "manual" : "recent",
-          permission: "chat",
-        })
-      }
-      onOpenSettingsFromProfile={() => {
-        setActiveDock("settings");
-        setProfileCard(null);
-      }}
-      onCloseProfileCard={() => setProfileCard(null)}
-      onOpenSendRequestFromProfile={(profile) => {
-        setFriendPanelOpen(true);
-        setFriendSearchResult(profile);
-        setProfileCard(null);
-      }}
+        onOpenSettingsFromProfile={() => {
+          setActiveDock("settings");
+          setProfileCard(null);
+        }}
+        onCloseProfileCard={() => setProfileCard(null)}
+        onOpenSendRequestFromProfile={(profile) => {
+          setFriendPanelOpen(true);
+          setFriendSearchResult(profile);
+          setProfileCard(null);
+        }}
+
       />
 
       <AvatarPreviewModal

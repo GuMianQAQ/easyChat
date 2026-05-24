@@ -6,9 +6,9 @@ import type {
   CurrentUser,
   FriendItem,
   MessageQuote,
+  PrivacySettings,
   RegisterFormState,
   UserSettings,
-  PrivacySettings,
 } from "../types/chat";
 
 export const DEFAULT_ROOM_NAME = "系统通知";
@@ -74,6 +74,10 @@ export function quoteFromMessage(message: ChatMessage): MessageQuote {
   };
 }
 
+export function revokedMessagePreview(isSelf: boolean): string {
+  return isSelf ? "你撤回了一条消息" : "对方撤回了一条消息";
+}
+
 function normalizePreviewText(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -96,7 +100,7 @@ function shortenPreviewText(value: string, maxLength = 40): string {
   if (!normalized) {
     return "";
   }
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}…` : normalized;
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
 }
 
 function extractFileName(value: string): string {
@@ -110,34 +114,46 @@ function extractFileName(value: string): string {
   return decodeURIComponent(tail.split("?")[0].split("#")[0]);
 }
 
-export function summarizeMessage(message?: ChatMessage): string {
-  if (!message) {
-    return "";
-  }
-  if (message.revoked) {
-    return "[已撤回]";
-  }
-  if (message.messageType === "image") {
-    return "[图片]";
-  }
-  if (message.messageType === "file") {
-    const fileName = extractFileName(message.content);
-    return fileName ? `[文件] ${shortenPreviewText(fileName, 24)}` : "[文件]";
-  }
-  const text = shortenPreviewText(message.content);
-  return text || "[消息]";
-}
-
 export function summarizeConversationPreview(messageType: string, content: string): string {
   if (messageType === "image") {
     return "[图片]";
   }
   if (messageType === "file") {
     const fileName = extractFileName(content);
-    return fileName ? `[文件] ${shortenPreviewText(fileName, 24)}` : "[文件]";
+    return fileName ? `[文件] ${fileName}` : "[文件]";
   }
-  const text = shortenPreviewText(content);
+  const text = normalizePreviewText(content);
   return text || "[消息]";
+}
+
+export function summarizeMessage(message?: ChatMessage): string {
+  if (!message) {
+    return "";
+  }
+  if (message.revoked) {
+    return revokedMessagePreview(message.isSelf);
+  }
+  return summarizeConversationPreview(message.messageType, message.content);
+}
+
+export function summarizeConversationMessage(
+  message?: Pick<
+    ChatMessage,
+    "content" | "isSelf" | "messageScope" | "messageType" | "revoked" | "senderName"
+  >,
+): string {
+  if (!message) {
+    return "";
+  }
+
+  const summary = message.revoked
+    ? revokedMessagePreview(message.isSelf)
+    : summarizeConversationPreview(message.messageType, message.content);
+
+  if (message.messageScope === "group") {
+    return `${message.senderName}：${summary}`;
+  }
+  return summary;
 }
 
 export function summarizeDraftPreview(content: string): string {
@@ -304,15 +320,10 @@ export function mergeRemoteConversations(previous: Conversation[], remote: Conve
       unreadCount: 0,
     } satisfies Conversation);
 
-  const merged: Conversation[] = remote.map((conversation) => {
-    const cached = local.get(conversation.id);
-    return {
-      ...conversation,
-      unreadCount: cached?.unreadCount ?? conversation.unreadCount,
-      pinned: conversation.pinned ?? cached?.pinned,
-      muted: conversation.muted ?? cached?.muted,
-    };
-  });
+  const merged: Conversation[] = remote.map((conversation) => ({
+    ...conversation,
+    unreadCount: conversation.unreadCount,
+  }));
 
   if (!merged.find((conversation) => conversation.id === "system")) {
     merged.push(systemConversation);
