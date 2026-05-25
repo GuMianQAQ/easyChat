@@ -195,6 +195,7 @@ export function currentUserToProfile(user: CurrentUser) {
     gender: user.gender,
     region: user.region,
     signature: user.signature,
+    momentCover: user.momentCover,
     isSelf: true,
     isFriend: true,
     requestStatus: "accepted" as const,
@@ -290,11 +291,14 @@ export function sortConversations(conversations: Conversation[]): Conversation[]
   });
 }
 
-export function resolveConversationView(conversation: Conversation, friends: FriendItem[]): Conversation {
+export function resolveConversationView(
+  conversation: Conversation,
+  friendsById: Map<string, FriendItem>,
+): Conversation {
   if (conversation.type !== "private" || !conversation.targetUserId) {
     return conversation;
   }
-  const friend = friends.find((item) => item.friendId === conversation.targetUserId);
+  const friend = friendsById.get(conversation.targetUserId);
   if (!friend) {
     return conversation;
   }

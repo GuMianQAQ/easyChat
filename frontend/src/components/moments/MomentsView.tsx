@@ -1,16 +1,16 @@
 import { useState } from "react";
-import type { MomentItem, MomentCommentItem } from "../../types/chat";
+import type { MouseEvent } from "react";
+import type { MomentCommentItem, MomentItem } from "../../types/chat";
 import MomentCard from "./MomentCard";
 import MomentComposer from "./MomentComposer";
-
-// ---------- Comments section ----------
 
 interface CommentsSectionProps {
   comments: MomentCommentItem[];
   momentId: string;
   onAddComment: (momentId: string, content: string) => void;
   onDeleteComment: (commentId: string) => void;
-  onOpenProfile: (userId: string, event: React.MouseEvent) => void;
+  onOpenProfile: (userId: string, event: MouseEvent) => void;
+  readOnly?: boolean;
 }
 
 function CommentsSection({
@@ -19,19 +19,22 @@ function CommentsSection({
   onAddComment,
   onDeleteComment,
   onOpenProfile,
+  readOnly = false,
 }: CommentsSectionProps) {
   const [text, setText] = useState("");
 
   const handleSubmit = () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     onAddComment(momentId, trimmed);
     setText("");
   };
 
   return (
     <div className="moments-comments">
-      {comments.length > 0 && (
+      {comments.length > 0 ? (
         <div className="moments-comments-list">
           {comments.map((comment) => (
             <div key={comment.id} className="moments-comment-row">
@@ -42,46 +45,48 @@ function CommentsSection({
                 {comment.author.nickname}
               </span>
               <span className="moments-comment-text">{comment.content}</span>
-              {comment.canDelete && (
+              {comment.canDelete && !readOnly ? (
                 <button
                   type="button"
                   className="moments-comment-delete"
                   onClick={() => onDeleteComment(comment.id)}
+                  title="删除评论"
                 >
                   ×
                 </button>
-              )}
+              ) : null}
             </div>
           ))}
         </div>
-      )}
-      <div className="moments-comment-form">
-        <input
-          className="moments-comment-input"
-          placeholder="写评论..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit();
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="moments-comment-submit"
-          disabled={!text.trim()}
-          onClick={handleSubmit}
-        >
-          发送
-        </button>
-      </div>
+      ) : null}
+
+      {!readOnly ? (
+        <div className="moments-comment-form">
+          <input
+            className="moments-comment-input"
+            placeholder="写评论..."
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="moments-comment-submit"
+            disabled={!text.trim()}
+            onClick={handleSubmit}
+          >
+            发送
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
-
-// ---------- Feed (main) ----------
 
 interface MomentsFeedProps {
   moments: MomentItem[];
@@ -91,8 +96,9 @@ interface MomentsFeedProps {
   onDelete: (momentId: string) => void;
   onAddComment: (momentId: string, content: string) => void;
   onDeleteComment: (commentId: string) => void;
-  onOpenProfile: (userId: string, event: React.MouseEvent) => void;
+  onOpenProfile: (userId: string, event: MouseEvent) => void;
   onOpenImagePreview: (src: string) => void;
+  showComposer?: boolean;
 }
 
 function MomentsFeed({
@@ -105,6 +111,7 @@ function MomentsFeed({
   onDeleteComment,
   onOpenProfile,
   onOpenImagePreview,
+  showComposer = true,
 }: MomentsFeedProps) {
   const [commentingId, setCommentingId] = useState<string | null>(null);
 
@@ -114,10 +121,9 @@ function MomentsFeed({
 
   return (
     <>
-      <MomentComposer
-        onUploadImage={onUploadImage}
-        onSubmit={onCreateMoment}
-      />
+      {showComposer ? (
+        <MomentComposer onUploadImage={onUploadImage} onSubmit={onCreateMoment} />
+      ) : null}
 
       {moments.length === 0 ? (
         <div className="moments-stream-empty" />
@@ -133,7 +139,7 @@ function MomentsFeed({
                 onOpenProfile={onOpenProfile}
                 onOpenImagePreview={onOpenImagePreview}
               />
-              {commentingId === moment.id && (
+              {commentingId === moment.id ? (
                 <div className="moments-post-comments">
                   <CommentsSection
                     comments={moment.comments}
@@ -143,7 +149,7 @@ function MomentsFeed({
                     onOpenProfile={onOpenProfile}
                   />
                 </div>
-              )}
+              ) : null}
             </article>
           ))}
         </div>

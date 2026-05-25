@@ -16,7 +16,13 @@ func (s *Server) registerMomentRoutes(api *gin.RouterGroup) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
-		items, err := s.Moments.GetFeed(user.ID)
+		targetUserID := strings.TrimSpace(c.Query("userId"))
+		var items []moments.MomentItem
+		if targetUserID == "" || targetUserID == user.ID {
+			items, err = s.Moments.GetFeed(user.ID)
+		} else {
+			items, err = s.Moments.GetProfileFeed(user.ID, targetUserID)
+		}
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

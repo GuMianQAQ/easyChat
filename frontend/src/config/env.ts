@@ -64,3 +64,19 @@ export function resolveApiUrl(path: string): string {
 export function resolveWsUrl(path: string): string {
   return new URL(path, `${WS_BASE_URL}/`).toString();
 }
+
+export function resolveMediaUrl(value: string | undefined): string {
+  const trimmed = value?.trim() || "";
+  if (!trimmed) {
+    return "";
+  }
+  if (
+    trimmed.startsWith("data:image/") ||
+    /^https?:\/\//i.test(trimmed) ||
+    /^blob:/i.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  const normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return resolveApiUrl(normalizedPath);
+}

@@ -15,8 +15,13 @@ function authHeaders(token: string, extra?: Record<string, string>): HeadersInit
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...extra };
 }
 
-export async function fetchMomentsFeed(token: string): Promise<MomentItem[]> {
-  const data = await requestJSON<{ items: MomentItem[] }>("/api/moments/feed", {
+export async function fetchMomentsFeed(token: string, userId?: string): Promise<MomentItem[]> {
+  const params = new URLSearchParams();
+  if (userId?.trim()) {
+    params.set("userId", userId.trim());
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const data = await requestJSON<{ items: MomentItem[] }>(`/api/moments/feed${suffix}`, {
     headers: authHeaders(token),
   });
   return data.items;

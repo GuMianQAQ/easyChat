@@ -33,6 +33,21 @@ interface MyChatWindowControls {
     isFocused: boolean;
     isMinimized: boolean;
   }>;
+  getBounds: () => Promise<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+  moveFrame: (payload: {
+    x: number;
+    y: number;
+  }) => Promise<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
   getState: () => Promise<MyChatWindowState>;
   onStateChange: (listener: (state: MyChatWindowState) => void) => () => void;
   onAttentionOpenConversation: (
@@ -47,8 +62,14 @@ interface MyChatAttentionPreview {
   onUpdate: (listener: (payload: MyChatAttentionPreviewPayload) => void) => () => void;
 }
 
+interface MyChatMomentsContext {
+  userId?: string;
+}
+
 interface MyChatMoments {
-  open: () => Promise<void>;
+  open: (context?: MyChatMomentsContext) => Promise<void>;
+  getContext: () => Promise<MyChatMomentsContext>;
+  onContextChange: (listener: (context: MyChatMomentsContext) => void) => () => void;
   isMomentsWindow: boolean;
 }
 

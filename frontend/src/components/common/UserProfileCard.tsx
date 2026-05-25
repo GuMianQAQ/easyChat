@@ -30,11 +30,13 @@ function UserProfileCard({
       }
       onClose();
     };
+
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
       }
     };
+
     window.addEventListener("mousedown", handlePointer);
     window.addEventListener("keydown", handleEscape);
     return () => {
@@ -44,17 +46,21 @@ function UserProfileCard({
   }, [onClose]);
 
   const primaryAction = profile.isSelf
-    ? {
-        label: "查看资料",
-        disabled: false,
-        onClick: () => onOpenSettings?.(),
-      }
-    : profile.isFriend || profile.requestStatus === "accepted"
+    ? onOpenSettings
       ? {
-          label: "发消息",
+          label: "查看资料",
           disabled: false,
-          onClick: () => onOpenChat?.(profile),
+          onClick: () => onOpenSettings(),
         }
+      : null
+    : profile.isFriend || profile.requestStatus === "accepted"
+      ? onOpenChat
+        ? {
+            label: "发消息",
+            disabled: false,
+            onClick: () => onOpenChat(profile),
+          }
+        : null
       : profile.requestStatus === "pending"
         ? {
             label: "已申请",
@@ -107,19 +113,21 @@ function UserProfileCard({
           {profile.signature ? <em>{profile.signature}</em> : null}
         </div>
       </div>
-      <div className="profile-card-actions">
-        <button
-          type="button"
-          className="header-action header-action-primary"
-          disabled={primaryAction.disabled}
-          onClick={() => {
-            primaryAction.onClick();
-            onClose();
-          }}
-        >
-          {primaryAction.label}
-        </button>
-      </div>
+      {primaryAction ? (
+        <div className="profile-card-actions">
+          <button
+            type="button"
+            className="header-action header-action-primary"
+            disabled={primaryAction.disabled}
+            onClick={() => {
+              primaryAction.onClick();
+              onClose();
+            }}
+          >
+            {primaryAction.label}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -16,6 +16,7 @@ interface ContactsDetailProps {
   onCloseManagement: () => void;
   onOpenManagement: () => void;
   onOpenChat: (contact: ContactItem) => void;
+  onOpenMoments: (contact: ContactItem) => void;
   onUpdateContact: (contactId: string, patch: Partial<ContactItem>) => void;
   onSetPermission: (contactId: string, permission: ContactPermission) => void;
   onAcceptRequest: (requestId: string) => void;
@@ -54,6 +55,7 @@ export default function ContactsDetail({
   onCloseManagement,
   onOpenManagement,
   onOpenChat,
+  onOpenMoments,
   onUpdateContact,
   onSetPermission,
   onAcceptRequest,
@@ -95,7 +97,6 @@ export default function ContactsDetail({
 
     window.addEventListener("mousedown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
-
     return () => {
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
@@ -281,6 +282,21 @@ export default function ContactsDetail({
           />
           <ProfileRow label="标签" value={tagsText || "未设置"} />
           <ProfileRow label="朋友权限" value={permissionLabel(contact.permission)} />
+          {canManageFriend ? (
+            <ProfileRow
+              label="朋友圈"
+              value="查看这位朋友的朋友圈"
+              action={
+                <button
+                  type="button"
+                  className="contact-profile-link"
+                  onClick={() => onOpenMoments(contact)}
+                >
+                  <span>打开</span>
+                </button>
+              }
+            />
+          ) : null}
           {phoneText ? <ProfileRow label="电话" value={phoneText} /> : null}
           {descriptionText || descriptionImages.length > 0 ? (
             <ProfileRow

@@ -9,7 +9,7 @@ export type ConnectionStatus =
   | "connected"
   | "failed";
 
-export type DockView = "chat" | "contacts" | "favorites" | "files" | "moments" | "settings";
+export type DockView = "chat" | "contacts" | "favorites" | "files" | "settings";
 export type ThemeMode = "light" | "dark" | "system";
 export type ContactPermission = "chat" | "limited";
 export type ContactSource = "self" | "group" | "recent" | "system" | "manual";

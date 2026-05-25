@@ -60,6 +60,7 @@ type UserSearchResult struct {
 	Gender             string `json:"gender,omitempty"`
 	Region             string `json:"region,omitempty"`
 	Signature          string `json:"signature,omitempty"`
+	MomentCover        string `json:"momentCover,omitempty"`
 	IsSelf             bool   `json:"isSelf"`
 	IsFriend           bool   `json:"isFriend"`
 	RequestStatus      string `json:"requestStatus"`
@@ -543,6 +544,7 @@ func (s *Service) buildUserResult(requesterID string, user auth.User) (UserSearc
 		Gender:             normalizeGender(user.Gender),
 		Region:             user.Region,
 		Signature:          user.Signature,
+		MomentCover:        user.MomentCover,
 		IsSelf:             isSelf,
 		IsFriend:           isFriend,
 		RequestStatus:      state.Status,

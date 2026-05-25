@@ -127,6 +127,7 @@ interface AppShellProps {
   onOpenAvatarPreview: (src: string) => void;
   onCloseContactsManagement: () => void;
   onOpenChatFromContact: (contact: ContactItem) => void;
+  onOpenContactMoments: (contact: ContactItem) => void;
   onUpdateContact: (contactId: string, patch: Partial<ContactItem>) => void;
   onSetContactPermission: (contactId: string, permission: ContactPermission) => void;
   onAcceptRequest: (requestId: string) => void;
@@ -207,6 +208,7 @@ export default function AppShell({
   onOpenAvatarPreview,
   onCloseContactsManagement,
   onOpenChatFromContact,
+  onOpenContactMoments,
   onUpdateContact,
   onSetContactPermission,
   onAcceptRequest,
@@ -343,6 +345,7 @@ export default function AppShell({
                 onCloseManagement={onCloseContactsManagement}
                 onOpenManagement={onOpenContactsManagement}
                 onOpenChat={onOpenChatFromContact}
+                onOpenMoments={onOpenContactMoments}
                 onUpdateContact={onUpdateContact}
                 onSetPermission={onSetContactPermission}
                 onAcceptRequest={onAcceptRequest}

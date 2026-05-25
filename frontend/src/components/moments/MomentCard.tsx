@@ -1,4 +1,5 @@
-import { Heart, Trash2, ImageIcon, MessageCircle } from "lucide-react";
+import { Heart, ImageIcon, MessageCircle, Trash2 } from "lucide-react";
+import type { MouseEvent } from "react";
 import type { MomentItem } from "../../types/chat";
 import Avatar from "../common/Avatar";
 
@@ -7,8 +8,9 @@ interface MomentCardProps {
   onLike: (momentId: string, liked: boolean) => void;
   onDelete: (momentId: string) => void;
   onComment: (momentId: string) => void;
-  onOpenProfile: (userId: string, event: React.MouseEvent) => void;
+  onOpenProfile: (userId: string, event: MouseEvent) => void;
   onOpenImagePreview: (src: string) => void;
+  readOnly?: boolean;
 }
 
 export default function MomentCard({
@@ -18,20 +20,20 @@ export default function MomentCard({
   onComment,
   onOpenProfile,
   onOpenImagePreview,
+  readOnly = false,
 }: MomentCardProps) {
   const timeAgo = formatTimeAgo(moment.createdAt);
   const likers =
     moment.likeCount > 0
       ? moment.likedByMe
         ? moment.likeCount === 1
-          ? "你赞了"
-          : `你等${moment.likeCount}人赞了`
-        : `${moment.likeCount}人赞了`
+          ? "你赞过"
+          : `你等${moment.likeCount}人赞过`
+        : `${moment.likeCount}人赞过`
       : null;
 
   return (
     <>
-      {/* Author header */}
       <div className="moments-post-header">
         <Avatar
           name={moment.author.nickname}
@@ -48,22 +50,21 @@ export default function MomentCard({
           </span>
           <span className="moments-post-time">{timeAgo}</span>
         </div>
-        {moment.canDelete && (
+        {moment.canDelete && !readOnly ? (
           <button
             type="button"
             className="moments-post-delete"
             onClick={() => onDelete(moment.id)}
-            title="删除"
+            title="删除动态"
           >
             <Trash2 size={13} />
           </button>
-        )}
+        ) : null}
       </div>
 
-      {/* Content body */}
       <div className="moments-post-body">
-        {moment.content && <p className="moments-post-text">{moment.content}</p>}
-        {moment.images.length > 0 && (
+        {moment.content ? <p className="moments-post-text">{moment.content}</p> : null}
+        {moment.images.length > 0 ? (
           <div className="moments-post-media">
             {moment.images.map((src, index) => (
               <div
@@ -81,21 +82,18 @@ export default function MomentCard({
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Social interaction box */}
       <div className="moments-post-social">
-        {/* Likes line */}
-        {moment.likeCount > 0 && (
+        {moment.likeCount > 0 ? (
           <div className="moments-post-likers">
             <Heart size={12} className="moments-post-likers-icon" />
             <span>{likers}</span>
           </div>
-        )}
+        ) : null}
 
-        {/* Comments inline */}
-        {moment.comments.length > 0 && (
+        {moment.comments.length > 0 ? (
           <div className="moments-post-comments-box">
             {moment.comments.slice(0, 3).map((comment) => (
               <div key={comment.id} className="moments-post-comment-inline">
@@ -105,41 +103,37 @@ export default function MomentCard({
                 >
                   {comment.author.nickname}
                 </span>
-                <span className="moments-post-comment-content">
-                  : {comment.content}
-                </span>
+                <span className="moments-post-comment-content">: {comment.content}</span>
               </div>
             ))}
-            {moment.comments.length > 3 && (
+            {moment.comments.length > 3 ? (
               <span className="moments-post-comments-more">
-                查看全部{moment.comments.length}条评论
+                查看全部 {moment.comments.length} 条评论
               </span>
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
 
-        {/* Action row — icon-only soft controls */}
-        <div className="moments-post-actions">
-          <button
-            type="button"
-            className={`moments-post-action ${moment.likedByMe ? "is-liked" : ""}`}
-            onClick={() => onLike(moment.id, moment.likedByMe)}
-            title={moment.likedByMe ? "取消赞" : "赞"}
-          >
-            <Heart
-              size={14}
-              fill={moment.likedByMe ? "currentColor" : "none"}
-            />
-          </button>
-          <button
-            type="button"
-            className="moments-post-action"
-            onClick={() => onComment(moment.id)}
-            title="评论"
-          >
-            <MessageCircle size={14} />
-          </button>
-        </div>
+        {!readOnly ? (
+          <div className="moments-post-actions">
+            <button
+              type="button"
+              className={`moments-post-action ${moment.likedByMe ? "is-liked" : ""}`}
+              onClick={() => onLike(moment.id, moment.likedByMe)}
+              title={moment.likedByMe ? "取消点赞" : "点赞"}
+            >
+              <Heart size={14} fill={moment.likedByMe ? "currentColor" : "none"} />
+            </button>
+            <button
+              type="button"
+              className="moments-post-action"
+              onClick={() => onComment(moment.id)}
+              title="评论"
+            >
+              <MessageCircle size={14} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </>
   );

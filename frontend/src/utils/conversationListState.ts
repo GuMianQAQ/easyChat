@@ -22,15 +22,15 @@ export function applyGroupConversationSummary(
   conversationId: string,
   groupConversation: GroupConversationPayload,
 ): Conversation[] {
+  const current = previous.find((conversation) => conversation.id === conversationId);
   return sortConversations(
     upsertConversation(previous, {
-      ...previous.find((conversation) => conversation.id === conversationId),
+      ...current,
       id: conversationId,
       type: "group",
       title: groupConversation.name,
       avatar: groupConversation.avatar,
-      unreadCount:
-        previous.find((conversation) => conversation.id === conversationId)?.unreadCount ?? 0,
+      unreadCount: current?.unreadCount ?? 0,
       announcement: groupConversation.announcement,
       memberCount: groupConversation.memberCount,
       muted: groupConversation.isMuted,

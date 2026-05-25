@@ -54,9 +54,22 @@ let latestAttentionAvatar = "";
 let latestAttentionConversationId = "";
 let latestAttentionScope: AttentionPreviewScope = "system";
 const attentionConversationIds = new Set<string>();
+let momentsWindowContext: { userId?: string } = {};
 
-const MOMENTS_WINDOW_WIDTH = 500;
+const MOMENTS_WINDOW_WIDTH = 570;
 const MOMENTS_WINDOW_HEIGHT = 720;
+
+function normalizeMomentsContext(context?: { userId?: string } | null) {
+  const userId = context?.userId?.trim();
+  return userId ? { userId } : {};
+}
+
+function sendMomentsContext() {
+  if (!momentsWindow || momentsWindow.isDestroyed()) {
+    return;
+  }
+  momentsWindow.webContents.send("mychat:moments-context", momentsWindowContext);
+}
 
 function resolveAssetPath(fileName: string, fallbackName?: string) {
   const candidates = app.isPackaged
@@ -650,12 +663,14 @@ function createWindow() {
   return mainWindow;
 }
 
-function showMomentsWindow() {
+function showMomentsWindow(context?: { userId?: string }) {
+  momentsWindowContext = normalizeMomentsContext(context);
   if (momentsWindow && !momentsWindow.isDestroyed()) {
     if (momentsWindow.isMinimized()) {
       momentsWindow.restore();
     }
     momentsWindow.focus();
+    sendMomentsContext();
     return;
   }
 
@@ -664,9 +679,10 @@ function showMomentsWindow() {
   momentsWindow = new BrowserWindow({
     width: MOMENTS_WINDOW_WIDTH,
     height: MOMENTS_WINDOW_HEIGHT,
+    resizable: false,
     minWidth: MOMENTS_WINDOW_WIDTH,
     maxWidth: MOMENTS_WINDOW_WIDTH,
-    minHeight: 500,
+    minHeight: 400,
     show: false,
     frame: false,
     title: "朋友圈",
@@ -685,21 +701,13 @@ function showMomentsWindow() {
   momentsWindow.on("closed", () => {
     momentsWindow = null;
   });
-  momentsWindow.on("will-resize", (event, bounds) => {
-    if (bounds.width !== MOMENTS_WINDOW_WIDTH) {
-      event.preventDefault();
-      momentsWindow?.setBounds({
-        x: bounds.x,
-        y: bounds.y,
-        width: MOMENTS_WINDOW_WIDTH,
-        height: bounds.height,
-      });
-    }
-  });
   bindWindowStateEvents(momentsWindow);
   momentsWindow.once("ready-to-show", () => {
     momentsWindow?.show();
     emitWindowState(momentsWindow);
+  });
+  momentsWindow.webContents.on("did-finish-load", () => {
+    sendMomentsContext();
   });
 
   if (app.isPackaged) {
@@ -731,29 +739,32 @@ function createTray() {
   trayEmptyIconPath = resolveAssetPath(EMPTY_TRAY_ICON_NAME);
   tray = new Tray(iconPath);
   tray.setToolTip(DEFAULT_TRAY_TOOLTIP);
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      {
-        label: "打开 MyChat",
-        click: () => {
-          showMainWindow();
-        },
-      },
-      {
-        label: "退出",
-        click: () => {
-          isQuitting = true;
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.destroy();
-          }
-          app.quit();
-        },
-      },
-    ]),
-  );
 
-  tray.on("double-click", () => {
+  const t = tray;
+  t.on("click", () => {
     showMainWindow();
+  });
+  t.on("right-click", () => {
+    t.popUpContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: "打开 MyChat",
+          click: () => {
+            showMainWindow();
+          },
+        },
+        {
+          label: "退出",
+          click: () => {
+            isQuitting = true;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.destroy();
+            }
+            app.quit();
+          },
+        },
+      ]),
+    );
   });
   tray.on("mouse-enter", () => {
     trayHovering = true;
@@ -826,6 +837,24 @@ ipcMain.handle("mychat-window:get-visibility-state", (event) => {
   };
 });
 
+ipcMain.handle("mychat-window:get-bounds", (event) => {
+  const target = getSenderWindow(event);
+  if (!target) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+  return target.getBounds();
+});
+
+ipcMain.handle("mychat-window:move-frame", (event, payload: { x: number; y: number }) => {
+  const target = getSenderWindow(event);
+  if (!target) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+
+  target.setPosition(Math.round(payload.x), Math.round(payload.y), false);
+  return target.getBounds();
+});
+
 ipcMain.handle("mychat-window:update-attention-preview", (_event, payload: AttentionPreviewPayload) => {
   latestAttentionTitle = (payload.title || "").trim();
   latestAttentionContent = (payload.content || "").trim();
@@ -866,8 +895,12 @@ ipcMain.handle("mychat-window:clear-attention-conversation", (_event, conversati
   return { remaining: attentionConversationIds.size };
 });
 
-ipcMain.handle("mychat-moments:open", () => {
-  showMomentsWindow();
+ipcMain.handle("mychat-moments:open", (_event, context?: { userId?: string }) => {
+  showMomentsWindow(context);
+});
+
+ipcMain.handle("mychat-moments:get-context", () => {
+  return momentsWindowContext;
 });
 
 ipcMain.handle("mychat-attention:open", () => {

@@ -99,6 +99,42 @@ func (s *Service) GetFeed(userID string) ([]MomentItem, error) {
 	return items, nil
 }
 
+func (s *Service) GetProfileFeed(viewerID, targetID string) ([]MomentItem, error) {
+	viewerID = strings.TrimSpace(viewerID)
+	targetID = strings.TrimSpace(targetID)
+	if viewerID == "" || targetID == "" {
+		return nil, errors.New("缺少用户信息")
+	}
+	if viewerID == targetID {
+		return s.GetFeed(viewerID)
+	}
+
+	ok, err := s.isVisibleFriend(viewerID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("无权查看该朋友圈")
+	}
+
+	var posts []Moment
+	if err := s.db.Where("author_id = ?", targetID).
+		Order("created_at desc").
+		Find(&posts).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]MomentItem, 0, len(posts))
+	for _, post := range posts {
+		item, err := s.buildMomentItem(post, viewerID)
+		if err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
 func (s *Service) DeletePost(userID, momentID string) error {
 	userID = strings.TrimSpace(userID)
 	momentID = strings.TrimSpace(momentID)

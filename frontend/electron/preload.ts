@@ -33,6 +33,20 @@ contextBridge.exposeInMainWorld("myChatWindow", {
     isFocused: boolean;
     isMinimized: boolean;
   }>,
+  getBounds: () =>
+    ipcRenderer.invoke("mychat-window:get-bounds") as Promise<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }>,
+  moveFrame: (payload: { x: number; y: number }) =>
+    ipcRenderer.invoke("mychat-window:move-frame", payload) as Promise<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }>,
   getState: () => ipcRenderer.invoke("mychat-window:get-state") as Promise<{
     isMaximized: boolean;
     isAlwaysOnTop: boolean;
@@ -59,7 +73,15 @@ contextBridge.exposeInMainWorld("myChatWindow", {
 });
 
 contextBridge.exposeInMainWorld("myChatMoments", {
-  open: () => ipcRenderer.invoke("mychat-moments:open"),
+  open: (context?: { userId?: string }) => ipcRenderer.invoke("mychat-moments:open", context),
+  getContext: () => ipcRenderer.invoke("mychat-moments:get-context") as Promise<{ userId?: string }>,
+  onContextChange: (listener: (context: { userId?: string }) => void) => {
+    const wrapped = (_event: unknown, context: { userId?: string }) => {
+      listener(context);
+    };
+    ipcRenderer.on("mychat:moments-context", wrapped);
+    return () => ipcRenderer.removeListener("mychat:moments-context", wrapped);
+  },
   isMomentsWindow: location.search.includes("window=moments"),
 });
 

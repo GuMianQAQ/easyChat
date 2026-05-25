@@ -142,13 +142,14 @@
 
 .contacts-profile-section {
   border-top: 1px solid var(--border-soft);
+  padding: 6px 0;
 }
 
 .contact-profile-row {
   display: grid;
   grid-template-columns: 104px minmax(0, 1fr);
-  gap: 16px;
-  padding: 16px 24px;
+  gap: 14px;
+  padding: 10px 24px;
   align-items: center;
 }
 
@@ -163,14 +164,14 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .contact-profile-value-text {
   min-width: 0;
   color: var(--text-main);
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -184,7 +185,7 @@
 .contact-profile-description-text {
   color: var(--text-main);
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -252,7 +253,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 24px 24px;
+  padding: 14px 24px 18px;
   border-top: 1px solid var(--border-soft);
 }
 

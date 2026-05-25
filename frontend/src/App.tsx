@@ -54,7 +54,6 @@ import {
   quoteFromMessage,
   resolveConversationView,
   sanitizeAuthDraft,
-  sortConversations,
   summarizeDraftPreview,
 } from "./utils/appHelpers";
 import {
@@ -67,7 +66,6 @@ import { createSocialActions } from "./app/createSocialActions";
 import "./styles/global.css";
 import "./styles/login.css";
 import "./styles/chat.css";
-import "./styles/moments.css";
 
 const APP_NAME = "MyChat";
 
@@ -441,25 +439,32 @@ function App() {
     });
   }, [favoriteItems, favoriteKeyword, favoriteType]);
 
+  const friendById = useMemo(() => {
+    const map = new Map<string, FriendItem>();
+    for (const friend of friends) {
+      map.set(friend.friendId, friend);
+      map.set(friend.id, friend);
+    }
+    return map;
+  }, [friends]);
+
   const visibleConversations = useMemo(
-    () => sortConversations(conversations.map((conversation) => resolveConversationView(conversation, friends))),
-    [conversations, friends],
+    () => conversations.map((conversation) => resolveConversationView(conversation, friendById)),
+    [conversations, friendById],
   );
 
   const visibleConversationsWithDrafts = useMemo(
     () =>
-      sortConversations(
-        visibleConversations.map((conversation) => {
-          const draft = drafts[conversation.id]?.trim();
-          if (!draft) {
-            return conversation;
-          }
-          return {
-            ...conversation,
-            lastMessage: summarizeDraftPreview(draft),
-          };
-        }),
-      ),
+      visibleConversations.map((conversation) => {
+        const draft = drafts[conversation.id]?.trim();
+        if (!draft) {
+          return conversation;
+        }
+        return {
+          ...conversation,
+          lastMessage: summarizeDraftPreview(draft),
+        };
+      }),
     [drafts, visibleConversations],
   );
 
@@ -981,6 +986,9 @@ function App() {
         onOpenAvatarPreview={(src) => setAvatarPreviewSrc(src)}
         onCloseContactsManagement={() => setContactsManagementOpen(false)}
         onOpenChatFromContact={handleOpenContactChat}
+        onOpenContactMoments={(contact) => {
+          window.myChatMoments?.open({ userId: contact.id });
+        }}
         onUpdateContact={handleUpdateContact}
         onSetContactPermission={handleSetContactPermission}
         onAcceptRequest={(requestId) => void handleAcceptFriendRequest(requestId)}

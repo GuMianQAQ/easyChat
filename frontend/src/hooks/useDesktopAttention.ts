@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import type { Conversation, DockView, FriendItem } from "../types/chat";
 import { summarizeConversationPreview } from "../utils/appHelpers";
@@ -44,18 +44,16 @@ function buildDesktopAttentionPreview(options: {
     messageType: string;
     content: string;
   };
-  conversations: Conversation[];
-  friends: FriendItem[];
+  conversationById: Map<string, Conversation>;
+  friendByUserId: Map<string, FriendItem>;
   count: number;
 }) {
-  const { message, conversations, friends, count } = options;
+  const { message, conversationById, friendByUserId, count } = options;
   const summary = buildAttentionPreviewSummary(message);
-  const conversation = conversations.find((item) => item.id === message.conversationId);
+  const conversation = conversationById.get(message.conversationId);
 
   if (message.messageScope === "group") {
-    const senderFriend = friends.find(
-      (item) => item.friendId === message.senderId || item.id === message.senderId,
-    );
+    const senderFriend = friendByUserId.get(message.senderId);
     const senderDisplayName = resolveFriendDisplayName(senderFriend, message.senderName);
     return {
       title: conversation?.title || "群聊",
@@ -69,9 +67,7 @@ function buildDesktopAttentionPreview(options: {
 
   if (message.messageScope === "private") {
     const counterpartUserId = message.isSelf ? message.targetUserId : message.senderId;
-    const counterpartFriend = friends.find(
-      (item) => item.friendId === counterpartUserId || item.id === counterpartUserId,
-    );
+    const counterpartFriend = counterpartUserId ? friendByUserId.get(counterpartUserId) : undefined;
     const title = resolveFriendDisplayName(
       counterpartFriend,
       message.isSelf ? message.targetName : message.senderName,
@@ -135,6 +131,18 @@ export function useDesktopAttention({
   friends,
   onAttentionOpenConversation,
 }: UseDesktopAttentionOptions) {
+  const conversationById = useMemo(
+    () => new Map(conversations.map((conversation) => [conversation.id, conversation])),
+    [conversations],
+  );
+  const friendByUserId = useMemo(() => {
+    const map = new Map<string, FriendItem>();
+    for (const friend of friends) {
+      map.set(friend.friendId, friend);
+      map.set(friend.id, friend);
+    }
+    return map;
+  }, [friends]);
   const activeDockRef = useRef(activeDock);
   const activeConversationRef = useRef(activeConversationId);
   const attentionRef = useRef<Set<string>>(new Set());
@@ -241,8 +249,8 @@ export function useDesktopAttention({
         unreadRef.current.set(message.conversationId, nextUnread);
         const preview = buildDesktopAttentionPreview({
           message,
-          conversations,
-          friends,
+          conversationById,
+          friendByUserId,
           count: nextUnread,
         });
         previewRef.current = upsertDesktopAttentionPreview(previewRef.current, preview);
@@ -254,7 +262,7 @@ export function useDesktopAttention({
 
       await clearConversationAttention(message.conversationId);
     },
-    [clearConversationAttention, conversations, enabled, friends],
+    [clearConversationAttention, conversationById, enabled, friendByUserId],
   );
 
   return {
