@@ -679,10 +679,10 @@ function showMomentsWindow(context?: { userId?: string }) {
   momentsWindow = new BrowserWindow({
     width: MOMENTS_WINDOW_WIDTH,
     height: MOMENTS_WINDOW_HEIGHT,
-    resizable: false,
+    resizable: true,
     minWidth: MOMENTS_WINDOW_WIDTH,
     maxWidth: MOMENTS_WINDOW_WIDTH,
-    minHeight: 400,
+    minHeight: 520,
     show: false,
     frame: false,
     title: "朋友圈",
@@ -842,16 +842,6 @@ ipcMain.handle("mychat-window:get-bounds", (event) => {
   if (!target) {
     return { x: 0, y: 0, width: 0, height: 0 };
   }
-  return target.getBounds();
-});
-
-ipcMain.handle("mychat-window:move-frame", (event, payload: { x: number; y: number }) => {
-  const target = getSenderWindow(event);
-  if (!target) {
-    return { x: 0, y: 0, width: 0, height: 0 };
-  }
-
-  target.setPosition(Math.round(payload.x), Math.round(payload.y), false);
   return target.getBounds();
 });
 

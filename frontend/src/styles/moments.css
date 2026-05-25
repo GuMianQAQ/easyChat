@@ -9,11 +9,8 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-main, #f5f5f7);
-}
-
-body.moments-window-dragging {
-  cursor: default;
-  user-select: none;
+  -webkit-app-region: drag;
+  pointer-events: auto;
 }
 
 .moments-feedback {
@@ -27,6 +24,7 @@ body.moments-window-dragging {
   font-size: 13px;
   line-height: 1.4;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  -webkit-app-region: no-drag;
 }
 
 .moments-feedback-success {
@@ -49,6 +47,7 @@ body.moments-window-dragging {
 .moments-hero {
   flex: 0 0 auto;
   position: relative;
+  -webkit-app-region: drag;
 }
 
 .moments-hero-cover {
@@ -58,6 +57,39 @@ body.moments-window-dragging {
   background-repeat: no-repeat;
   background-size: cover;
   cursor: default;
+  -webkit-app-region: drag;
+}
+
+.moments-hero-cover-action-zone {
+  position: absolute;
+  top: 48px;
+  left: 18px;
+  min-width: 58px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
+  padding: 0 12px;
+  margin: 0;
+  cursor: default;
+  z-index: 1;
+  -webkit-app-region: no-drag;
+  color: transparent;
+  font-size: 0;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.moments-hero-cover-action-zone::before {
+  content: "Cover";
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.08em;
 }
 
 .moments-hero-cover-default {
@@ -75,7 +107,8 @@ body.moments-window-dragging {
   display: flex;
   align-items: center;
   gap: 14px;
-  z-index: 1;
+  z-index: 2;
+  -webkit-app-region: no-drag;
 }
 
 .moments-hero-info {
@@ -131,6 +164,7 @@ body.moments-window-dragging {
   max-width: 640px;
   margin: 0 auto;
   width: 100%;
+  -webkit-app-region: no-drag;
 }
 
 /* ---------- Composer — collapsed ---------- */
@@ -666,6 +700,7 @@ body.moments-window-dragging {
   position: fixed;
   inset: 0;
   z-index: 999;
+  -webkit-app-region: no-drag;
 }
 
 .moments-cover-menu {
@@ -676,6 +711,7 @@ body.moments-window-dragging {
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+  -webkit-app-region: no-drag;
 }
 
 .moments-cover-menu-item {
@@ -712,6 +748,7 @@ body.moments-window-dragging {
   justify-content: center;
   background: rgba(15, 23, 42, 0.82);
   cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
 .moments-cover-preview-image {
@@ -719,4 +756,12 @@ body.moments-window-dragging {
   max-height: 90%;
   object-fit: contain;
   border-radius: 4px;
+}
+
+.moments-stream *,
+.moments-cover-menu *,
+.moments-cover-preview *,
+.profile-card,
+.profile-card * {
+  -webkit-app-region: no-drag;
 }

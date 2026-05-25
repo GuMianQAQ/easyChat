@@ -41,25 +41,25 @@ function DesktopTitleBar({ variant = "default" }: DesktopTitleBarProps) {
 
   return (
     <header className={`desktop-titlebar desktop-titlebar-${variant}`}>
-      <button
-        type="button"
-        className={`desktop-titlebar-drag desktop-titlebar-drag-${variant}`}
-        aria-hidden="true"
-        tabIndex={-1}
-        onDoubleClick={
-          supportsFullControls
-            ? () => {
-                void window.myChatWindow?.toggleMaximize();
-              }
-            : undefined
-        }
-      />
+      {supportsFullControls ? (
+        <button
+          type="button"
+          className={`desktop-titlebar-drag desktop-titlebar-drag-${variant}`}
+          aria-hidden="true"
+          tabIndex={-1}
+          onDoubleClick={() => {
+            void window.myChatWindow?.toggleMaximize();
+          }}
+        />
+      ) : (
+        <div className={`desktop-titlebar-drag desktop-titlebar-drag-${variant}`} aria-hidden="true" />
+      )}
       <div className="desktop-titlebar-controls">
         {supportsFullControls ? (
           <button
             type="button"
             className={`desktop-titlebar-button ${isAlwaysOnTop ? "desktop-titlebar-button-active" : ""}`}
-            aria-label={isAlwaysOnTop ? "取消置顶" : "置顶窗口"}
+            aria-label={isAlwaysOnTop ? "Unpin window" : "Pin window"}
             onClick={() => {
               void window.myChatWindow?.toggleAlwaysOnTop();
             }}
@@ -70,7 +70,7 @@ function DesktopTitleBar({ variant = "default" }: DesktopTitleBarProps) {
         <button
           type="button"
           className={`desktop-titlebar-button desktop-titlebar-button-${variant}`}
-          aria-label="最小化"
+          aria-label="Minimize"
           onClick={() => {
             void window.myChatWindow?.minimize();
           }}
@@ -81,7 +81,7 @@ function DesktopTitleBar({ variant = "default" }: DesktopTitleBarProps) {
           <button
             type="button"
             className="desktop-titlebar-button"
-            aria-label={isMaximized ? "还原" : "最大化"}
+            aria-label={isMaximized ? "Restore" : "Maximize"}
             onClick={() => {
               void window.myChatWindow?.toggleMaximize();
             }}
@@ -92,7 +92,7 @@ function DesktopTitleBar({ variant = "default" }: DesktopTitleBarProps) {
         <button
           type="button"
           className={`desktop-titlebar-button desktop-titlebar-button-${variant} desktop-titlebar-button-close`}
-          aria-label="关闭"
+          aria-label="Close"
           onClick={() => {
             void window.myChatWindow?.close();
           }}

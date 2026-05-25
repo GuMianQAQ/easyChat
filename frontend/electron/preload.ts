@@ -40,13 +40,6 @@ contextBridge.exposeInMainWorld("myChatWindow", {
       width: number;
       height: number;
     }>,
-  moveFrame: (payload: { x: number; y: number }) =>
-    ipcRenderer.invoke("mychat-window:move-frame", payload) as Promise<{
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }>,
   getState: () => ipcRenderer.invoke("mychat-window:get-state") as Promise<{
     isMaximized: boolean;
     isAlwaysOnTop: boolean;

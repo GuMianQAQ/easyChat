@@ -39,15 +39,6 @@ interface MyChatWindowControls {
     width: number;
     height: number;
   }>;
-  moveFrame: (payload: {
-    x: number;
-    y: number;
-  }) => Promise<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }>;
   getState: () => Promise<MyChatWindowState>;
   onStateChange: (listener: (state: MyChatWindowState) => void) => () => void;
   onAttentionOpenConversation: (

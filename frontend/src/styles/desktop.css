@@ -47,7 +47,7 @@
   z-index: 8;
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.24) 0%, rgba(15, 23, 42, 0.08) 55%, rgba(15, 23, 42, 0) 100%);
   border-bottom: none;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .desktop-titlebar-drag {
@@ -58,8 +58,8 @@
 
 .desktop-titlebar-drag-moments {
   min-height: 30px;
-  -webkit-app-region: no-drag;
-  pointer-events: none;
+  -webkit-app-region: drag;
+  pointer-events: auto;
 }
 
 .desktop-titlebar-controls {
@@ -68,10 +68,7 @@
   align-items: stretch;
   -webkit-app-region: no-drag;
   position: relative;
-  z-index: 1;
-}
-
-.desktop-titlebar-moments .desktop-titlebar-controls {
+  z-index: 12;
   pointer-events: auto;
 }
 
@@ -83,6 +80,7 @@
   color: var(--text-secondary);
   cursor: default;
   -webkit-app-region: no-drag;
+  pointer-events: auto;
   transition: background-color 0.18s ease, color 0.18s ease;
 }
 

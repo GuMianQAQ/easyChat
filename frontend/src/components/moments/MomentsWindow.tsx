@@ -90,18 +90,6 @@ function normalizeCoverUrl(value?: string): string | null {
 export default function MomentsWindow() {
   const token = getToken();
   const fileRef = useRef<HTMLInputElement>(null);
-  const gestureStateRef = useRef<
-    | {
-        kind: "move";
-        startScreenX: number;
-        startScreenY: number;
-        startX: number;
-        startY: number;
-      }
-    | null
-  >(null);
-  const gestureFrameRef = useRef<number | null>(null);
-  const gesturePendingRef = useRef<{ kind: "move"; x: number; y: number } | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
   const [launchContext, setLaunchContext] = useState<{ userId?: string }>({});
@@ -119,67 +107,6 @@ export default function MomentsWindow() {
     const timer = window.setTimeout(() => setFeedback(null), 2600);
     return () => window.clearTimeout(timer);
   }, [feedback]);
-
-  useEffect(() => {
-    if (!window.myChatDesktop || !window.myChatWindow) {
-      return undefined;
-    }
-
-    const flushGesture = () => {
-      gestureFrameRef.current = null;
-      const payload = gesturePendingRef.current;
-      if (!payload) {
-        return;
-      }
-      gesturePendingRef.current = null;
-      void window.myChatWindow?.moveFrame({ x: payload.x, y: payload.y });
-    };
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const state = gestureStateRef.current;
-      if (!state) {
-        return;
-      }
-
-      const deltaX = event.screenX - state.startScreenX;
-      const deltaY = event.screenY - state.startScreenY;
-      if (Math.abs(deltaX) < 3 && Math.abs(deltaY) < 3) {
-        return;
-      }
-      gesturePendingRef.current = {
-        kind: "move",
-        x: state.startX + deltaX,
-        y: state.startY + deltaY,
-      };
-
-      if (gestureFrameRef.current === null) {
-        gestureFrameRef.current = window.requestAnimationFrame(flushGesture);
-      }
-    };
-
-    const handleGestureEnd = () => {
-      gestureStateRef.current = null;
-      gesturePendingRef.current = null;
-      if (gestureFrameRef.current !== null) {
-        window.cancelAnimationFrame(gestureFrameRef.current);
-        gestureFrameRef.current = null;
-      }
-      document.body.classList.remove("moments-window-dragging");
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleGestureEnd);
-    window.addEventListener("blur", handleGestureEnd);
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleGestureEnd);
-      window.removeEventListener("blur", handleGestureEnd);
-      if (gestureFrameRef.current !== null) {
-        window.cancelAnimationFrame(gestureFrameRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!window.myChatMoments) {
@@ -483,24 +410,6 @@ export default function MomentsWindow() {
     [isSelfView],
   );
 
-  const handleCoverMouseDown = useCallback(
-    async (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!window.myChatDesktop || !window.myChatWindow || event.button !== 0) {
-        return;
-      }
-      const bounds = await window.myChatWindow.getBounds();
-      gestureStateRef.current = {
-        kind: "move",
-        startScreenX: event.screenX,
-        startScreenY: event.screenY,
-        startX: bounds.x,
-        startY: bounds.y,
-      };
-      document.body.classList.add("moments-window-dragging");
-    },
-    [],
-  );
-
   const openProfileCard = useCallback(
     async (userId: string, anchor: { x: number; y: number }) => {
       if (!token) {
@@ -568,10 +477,16 @@ export default function MomentsWindow() {
           <div
             className="moments-hero-cover moments-hero-drag-surface"
             style={{ background: `url(${coverUrl}) center/cover no-repeat` }}
-            onMouseDown={(event) => void handleCoverMouseDown(event)}
+          />
+          <button
+            type="button"
+            className="moments-hero-cover-action-zone"
+            aria-label="鏌ョ湅灏侀潰"
             onDoubleClick={handleCoverDoubleClick}
             onContextMenu={handleCoverContextMenu}
-          />
+          >
+            灏侀潰
+          </button>
           {viewedProfile ? (
             <div className="moments-hero-identity">
               <button
