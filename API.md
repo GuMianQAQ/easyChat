@@ -980,7 +980,143 @@ GET /api/favorites?type=image&keyword=你好
 
 ---
 
-## 17. 后续维护说明
+## 17. AI 功能接口
+
+### 17.1 SSE 流式对话
+
+```
+GET /api/ai/stream?query=<消息内容>&token=<JWT>
+```
+
+返回 `text/event-stream`，每条消息格式：
+```
+data: <文本片段>
+
+```
+
+结束时：
+```
+event: done
+data: {}
+
+```
+
+### 17.2 同步对话
+
+```
+POST /api/ai/chat
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "content": "/ai 你好",
+  "conversationId": "private:用户A:ai-assistant",
+  "messageScope": "private"
+}
+```
+
+### 17.3 翻译
+
+```
+POST /api/ai/translate
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "text": "要翻译的文本",
+  "targetLang": "英文"
+}
+```
+
+响应：`{"translation": "Hello"}`
+
+### 17.4 摘要
+
+```
+POST /api/ai/summarize
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "texts": ["消息1", "消息2", "消息3"]
+}
+```
+
+响应：`{"summary": "摘要内容"}`
+
+### 17.5 生成回复建议
+
+```
+POST /api/ai/generate-replies
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "message": "收到的消息内容"
+}
+```
+
+响应：`{"replies": ["好的", "没问题", "收到"]}`
+
+### 17.6 生成代码
+
+```
+POST /api/ai/generate-code
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "query": "写一个 HTTP 服务器"
+}
+```
+
+响应：`{"code": "```go\n...```"}`
+
+### 17.7 语义搜索
+
+```
+GET /api/ai/search?q=<搜索词>&conversationId=<会话ID>
+Authorization: Bearer <token>
+```
+
+响应：`{"results": ["匹配结果1", "匹配结果2"]}`
+
+### 17.8 使用统计
+
+```
+GET /api/ai/stats
+Authorization: Bearer <token>
+```
+
+响应：
+```json
+{
+  "chat": 10,
+  "stream": 5,
+  "translate": 3,
+  "summarize": 2,
+  "replies": 1,
+  "code": 4,
+  "search": 0,
+  "total": 25
+}
+```
+
+### 17.9 群机器人开关
+
+```
+PATCH /api/groups/:id/bot
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "botEnabled": true
+}
+```
+
+---
+
+## 18. 后续维护说明
 
 如果实际代码接口发生变化，需要同步更新：
 

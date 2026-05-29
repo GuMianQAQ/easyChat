@@ -126,7 +126,12 @@ function MomentsFeed({
       ) : null}
 
       {moments.length === 0 ? (
-        <div className="moments-stream-empty" />
+        <div className="moments-stream-empty">
+          <div className="moments-stream-empty-title">暂无朋友圈内容</div>
+          <div className="moments-stream-empty-subtitle">
+            {showComposer ? "发一条动态，让这里不再空白。" : "对方暂时还没有公开的朋友圈内容。"}
+          </div>
+        </div>
       ) : (
         <div className="moments-feed-list">
           {moments.map((moment) => (

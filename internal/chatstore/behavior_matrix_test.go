@@ -283,7 +283,6 @@ func TestGroupLifecycleRoleBoundaries(t *testing.T) {
 
 	owner := seedBehaviorUser(t, service, auth.User{ID: "u-owner", Username: "owner_01", Nickname: "Owner", PasswordHash: "hash"})
 	member := seedBehaviorUser(t, service, auth.User{ID: "u-member", Username: "member_01", Nickname: "Member", PasswordHash: "hash"})
-
 	conversation, err := service.CreateGroupConversation(owner.ID, "Team", []string{member.ID})
 	if err != nil {
 		t.Fatalf("create group conversation: %v", err)
@@ -365,4 +364,65 @@ func TestGroupLifecycleRoleBoundaries(t *testing.T) {
 			favoriteCount,
 		)
 	}
+}
+
+func TestGroupBotTogglePreservesMemberConversationVisibility(t *testing.T) {
+	service := newBehaviorMatrixService(t)
+
+	owner := seedBehaviorUser(t, service, auth.User{ID: "u-owner", Username: "owner_01", Nickname: "Owner", PasswordHash: "hash"})
+	member := seedBehaviorUser(t, service, auth.User{ID: "u-member", Username: "member_01", Nickname: "Member", PasswordHash: "hash"})
+	seedBehaviorUser(t, service, auth.User{ID: "ai-assistant", Username: "ai_assistant", Nickname: "AI 助手", PasswordHash: "hash"})
+
+	conversation, err := service.CreateGroupConversation(owner.ID, "Team", []string{member.ID})
+	if err != nil {
+		t.Fatalf("create group conversation: %v", err)
+	}
+
+	enabled, err := service.SetGroupBotEnabled(owner.ID, conversation.ID, true)
+	if err != nil {
+		t.Fatalf("enable group bot: %v", err)
+	}
+	if !enabled.BotEnabled {
+		t.Fatal("expected botEnabled to be true after enabling")
+	}
+
+	ownerConversations, err := service.ListConversations(owner.ID)
+	if err != nil {
+		t.Fatalf("list owner conversations: %v", err)
+	}
+	memberConversations, err := service.ListConversations(member.ID)
+	if err != nil {
+		t.Fatalf("list member conversations after enable: %v", err)
+	}
+	if !containsConversationSummary(ownerConversations, conversation.ID) {
+		t.Fatal("expected owner to keep seeing the group after enabling bot")
+	}
+	if !containsConversationSummary(memberConversations, conversation.ID) {
+		t.Fatal("expected member to keep seeing the group after enabling bot")
+	}
+
+	disabled, err := service.SetGroupBotEnabled(owner.ID, conversation.ID, false)
+	if err != nil {
+		t.Fatalf("disable group bot: %v", err)
+	}
+	if disabled.BotEnabled {
+		t.Fatal("expected botEnabled to be false after disabling")
+	}
+
+	memberConversations, err = service.ListConversations(member.ID)
+	if err != nil {
+		t.Fatalf("list member conversations after disable: %v", err)
+	}
+	if !containsConversationSummary(memberConversations, conversation.ID) {
+		t.Fatal("expected member to keep seeing the group after disabling bot")
+	}
+}
+
+func containsConversationSummary(items []ConversationSummary, conversationID string) bool {
+	for _, item := range items {
+		if item.ID == conversationID {
+			return true
+		}
+	}
+	return false
 }

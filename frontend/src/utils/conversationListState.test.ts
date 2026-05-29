@@ -77,6 +77,7 @@ test("applyGroupConversationSummary updates group shell fields without dropping 
     myRole: "owner",
     canEditGroupProfile: true,
     isMuted: true,
+    botEnabled: false,
     memberCount: 6,
     members: [],
     remark: "",

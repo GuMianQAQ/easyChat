@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, MouseEvent as ReactMouseEvent } from "react";
+import { Minus, X } from "lucide-react";
 import type { CurrentUser, MomentItem, UserProfile } from "../../types/chat";
 import {
   addMomentComment,
@@ -99,6 +100,7 @@ export default function MomentsWindow() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [profileCard, setProfileCard] = useState<{ profile: UserProfile; x: number; y: number } | null>(null);
+  const [coverLoadFailed, setCoverLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!feedback) {
@@ -172,7 +174,7 @@ export default function MomentsWindow() {
         setTargetProfile(null);
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "朋友圈加载失败",
+          text: error instanceof Error ? error.message : "Failed to load moments",
         });
       } finally {
         if (!cancelled) {
@@ -198,7 +200,34 @@ export default function MomentsWindow() {
   }, [currentUser, targetProfile]);
 
   const isSelfView = Boolean(currentUser && viewedProfile && viewedProfile.id === currentUser.id);
-  const coverUrl = normalizeCoverUrl(viewedProfile?.momentCover) || DEFAULT_COVER_URL;
+  const requestedCoverUrl = normalizeCoverUrl(viewedProfile?.momentCover);
+  const coverUrl = coverLoadFailed || !requestedCoverUrl ? DEFAULT_COVER_URL : requestedCoverUrl;
+
+  useEffect(() => {
+    setCoverLoadFailed(false);
+
+    if (!requestedCoverUrl || requestedCoverUrl === DEFAULT_COVER_URL) {
+      return;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (!cancelled) {
+        setCoverLoadFailed(false);
+      }
+    };
+    image.onerror = () => {
+      if (!cancelled) {
+        setCoverLoadFailed(true);
+      }
+    };
+    image.src = requestedCoverUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedCoverUrl]);
 
   const refreshSelfProfile = useCallback(async () => {
     if (!token) {
@@ -222,7 +251,7 @@ export default function MomentsWindow() {
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "发布动态失败",
+          text: error instanceof Error ? error.message : "Failed to publish moment",
         });
       }
     },
@@ -254,7 +283,7 @@ export default function MomentsWindow() {
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "点赞失败",
+          text: error instanceof Error ? error.message : "Failed to like moment",
         });
       }
     },
@@ -272,7 +301,7 @@ export default function MomentsWindow() {
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "删除动态失败",
+          text: error instanceof Error ? error.message : "Failed to delete moment",
         });
       }
     },
@@ -296,7 +325,7 @@ export default function MomentsWindow() {
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "评论失败",
+          text: error instanceof Error ? error.message : "Failed to add comment",
         });
       }
     },
@@ -319,7 +348,7 @@ export default function MomentsWindow() {
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "删除评论失败",
+          text: error instanceof Error ? error.message : "Failed to delete comment",
         });
       }
     },
@@ -329,7 +358,7 @@ export default function MomentsWindow() {
   const handleUploadImage = useCallback(
     async (file: File): Promise<string> => {
       if (!token) {
-        throw new Error("请先登录");
+        throw new Error("Please sign in first");
       }
       return uploadImage(token, file);
     },
@@ -360,11 +389,11 @@ export default function MomentsWindow() {
     try {
       await updateProfile(token, { momentCover: "" });
       await refreshSelfProfile();
-      setFeedback({ tone: "success", text: "已恢复默认封面" });
+      setFeedback({ tone: "success", text: "Default cover restored" });
     } catch (error) {
       setFeedback({
         tone: "error",
-        text: error instanceof Error ? error.message : "重置封面失败",
+        text: error instanceof Error ? error.message : "Failed to reset cover",
       });
     }
   }, [closeContextMenu, isSelfView, refreshSelfProfile, token]);
@@ -379,16 +408,16 @@ export default function MomentsWindow() {
         return;
       }
 
-      setFeedback({ tone: "info", text: "正在更新封面..." });
+      setFeedback({ tone: "info", text: "Updating cover..." });
       try {
         const url = await uploadImage(token, file);
         await updateProfile(token, { momentCover: url });
         await refreshSelfProfile();
-        setFeedback({ tone: "success", text: "朋友圈封面已更新" });
+        setFeedback({ tone: "success", text: "Moments cover updated" });
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "更换封面失败",
+          text: error instanceof Error ? error.message : "Failed to change cover",
         });
       } finally {
         if (fileRef.current) {
@@ -424,7 +453,7 @@ export default function MomentsWindow() {
       } catch (error) {
         setFeedback({
           tone: "error",
-          text: error instanceof Error ? error.message : "加载资料失败",
+          text: error instanceof Error ? error.message : "Failed to load profile",
         });
       }
     },
@@ -460,7 +489,7 @@ export default function MomentsWindow() {
           className="moments-surface"
           style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 14 }}
         >
-          请先登录
+          Please sign in first
         </div>
       </DesktopWindowFrame>
     );
@@ -468,6 +497,31 @@ export default function MomentsWindow() {
 
   return (
     <DesktopWindowFrame variant="moments">
+      <div className="moments-window-drag-layer" aria-hidden="true" />
+
+      <div className="moments-window-controls">
+        <button
+          type="button"
+          className="moments-window-control-button"
+          aria-label="Minimize"
+          onClick={() => {
+            void window.myChatWindow?.minimize();
+          }}
+        >
+          <Minus size={16} />
+        </button>
+        <button
+          type="button"
+          className="moments-window-control-button moments-window-control-button-close"
+          aria-label="Close"
+          onClick={() => {
+            void window.myChatWindow?.close();
+          }}
+        >
+          <X size={15} />
+        </button>
+      </div>
+
       <div className="moments-surface">
         {feedback ? (
           <div className={`moments-feedback moments-feedback-${feedback.tone}`}>{feedback.text}</div>
@@ -481,19 +535,18 @@ export default function MomentsWindow() {
           <button
             type="button"
             className="moments-hero-cover-action-zone"
-            aria-label="鏌ョ湅灏侀潰"
+            aria-label="View cover"
+            title="Double-click to preview cover, right-click for cover menu"
             onDoubleClick={handleCoverDoubleClick}
             onContextMenu={handleCoverContextMenu}
-          >
-            灏侀潰
-          </button>
+          />
           {viewedProfile ? (
             <div className="moments-hero-identity">
               <button
                 type="button"
                 className="moments-hero-avatar-wrapper"
                 onClick={handleOpenHeroProfile}
-                title="查看资料"
+                title="View profile"
               >
                 <img
                   className="avatar avatar-lg"
@@ -512,7 +565,7 @@ export default function MomentsWindow() {
                 type="button"
                 className="moments-hero-info moments-hero-info-button"
                 onClick={handleOpenHeroProfile}
-                title="查看资料"
+                title="View profile"
               >
                 <span className="moments-hero-nickname">{viewedProfile.nickname}</span>
               </button>
@@ -532,17 +585,17 @@ export default function MomentsWindow() {
             />
             <div className="moments-cover-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
               <button type="button" className="moments-cover-menu-item" onClick={handleViewCover}>
-                查看封面
+                View cover
               </button>
               <button type="button" className="moments-cover-menu-item" onClick={handleChangeCover}>
-                更换封面
+                Change cover
               </button>
               <button
                 type="button"
                 className="moments-cover-menu-item moments-cover-menu-item-danger"
                 onClick={handleResetCover}
               >
-                重置封面
+                Reset cover
               </button>
             </div>
           </>
@@ -584,6 +637,31 @@ export default function MomentsWindow() {
           anchor={{ x: profileCard.x, y: profileCard.y }}
           onClose={() => setProfileCard(null)}
           onOpenAvatarPreview={(src) => setCoverPreviewUrl(src)}
+          onOpenSettings={() => {
+            void window.myChatWindow?.requestProfileAction?.({
+              action: "settings",
+              profile: profileCard.profile,
+            });
+            setProfileCard(null);
+          }}
+          onOpenChat={(profile) => {
+            void window.myChatWindow?.requestProfileAction?.({
+              action: "chat",
+              profile,
+            });
+            setProfileCard(null);
+          }}
+          onSendRequest={(profile) => {
+            void window.myChatWindow?.requestProfileAction?.({
+              action: "send-request",
+              profile,
+            });
+            setProfileCard(null);
+          }}
+          onOpenMoments={(profile) => {
+            void window.myChatMoments?.open({ userId: profile.id });
+            setProfileCard(null);
+          }}
         />
       ) : null}
     </DesktopWindowFrame>

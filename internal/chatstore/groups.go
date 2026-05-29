@@ -8,6 +8,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const groupBotUserID = "ai-assistant"
+
 func (s *Service) GetGroupConversation(userID, conversationID string) (GroupConversationPayload, error) {
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {
@@ -55,6 +57,7 @@ func (s *Service) GetGroupConversation(userID, conversationID string) (GroupConv
 		MyNickname:          member.GroupNickname,
 		MyRole:              member.Role,
 		CanEditGroupProfile: member.Role == "owner",
+		BotEnabled:          conversation.BotEnabled,
 		IsMuted:             member.IsMuted,
 		MemberCount:         len(items),
 		Members:             items,
@@ -245,4 +248,61 @@ func (s *Service) groupDisplayName(conversationID, userID, fallback string) stri
 		}
 	}
 	return strings.TrimSpace(fallback)
+}
+
+func (s *Service) IsGroupBotEnabled(userID, conversationID string) (bool, error) {
+	conversation, err := s.getConversationForUser(userID, conversationID)
+	if err != nil {
+		return false, err
+	}
+	if conversation.Type != GroupConversationType {
+		return false, errors.New("当前会话不是群聊")
+	}
+	return conversation.BotEnabled, nil
+}
+
+func (s *Service) SetGroupBotEnabled(userID, conversationID string, enabled bool) (GroupConversationPayload, error) {
+	conversation, err := s.getConversationForUser(userID, conversationID)
+	if err != nil {
+		return GroupConversationPayload{}, err
+	}
+	if conversation.Type != GroupConversationType {
+		return GroupConversationPayload{}, errors.New("当前会话不是群聊")
+	}
+	member, err := s.memberRecord(userID, conversationID)
+	if err != nil {
+		return GroupConversationPayload{}, err
+	}
+	if member == nil {
+		return GroupConversationPayload{}, errors.New("当前用户不在该群聊中")
+	}
+	if member.Role != "owner" {
+		return GroupConversationPayload{}, errors.New("只有群主可以设置群机器人")
+	}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Conversation{}).
+			Where("id = ?", conversationID).
+			Updates(map[string]any{"bot_enabled": enabled, "updated_at": time.Now()}).Error; err != nil {
+			return err
+		}
+
+		if enabled {
+			record := ConversationMember{
+				ID:             newID("member"),
+				ConversationID: conversationID,
+				UserID:         groupBotUserID,
+				Role:           "member",
+				JoinedAt:       time.Now(),
+			}
+			return tx.Where("conversation_id = ? AND user_id = ?", conversationID, groupBotUserID).FirstOrCreate(&record).Error
+		}
+
+		return tx.Where("conversation_id = ? AND user_id = ?", conversationID, groupBotUserID).Delete(&ConversationMember{}).Error
+	})
+	if err != nil {
+		return GroupConversationPayload{}, err
+	}
+
+	return s.GetGroupConversation(userID, conversationID)
 }

@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"easyChat/internal/ai"
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
 	"easyChat/internal/database"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
 type Server struct {
@@ -23,6 +26,7 @@ type Server struct {
 	Auth            *auth.Service
 	Store           *chatstore.Service
 	Social          *social.Service
+	AI              *ai.Service
 	Moments         *moments.Service
 	frontendDistDir string
 	uploadsDir      string
@@ -52,12 +56,27 @@ func NewServer(addr string) *Server {
 		log.Fatalf("failed to initialize social service: %v", err)
 	}
 
+	aiConfig := ai.LoadConfig()
+	aiProvider := ai.NewProvider(aiConfig)
+	aiService := ai.NewService(aiProvider, store, db, aiConfig)
+
+	if err := ai.EnsureSystemUser(db); err != nil {
+		log.Printf("warning: failed to create AI system user: %v", err)
+	}
+	authService.SetAfterRegister(func(tx *gorm.DB, user auth.User) error {
+		return socialService.EnsureSystemFriendInTx(tx, user.ID)
+	})
+	if err := socialService.EnsureSystemFriendForAllUsers(); err != nil {
+		log.Printf("warning: failed to backfill AI friendships: %v", err)
+	}
+
 	return &Server{
 		Addr:            addr,
 		Hub:             webchat.NewHub(),
 		Auth:            authService,
 		Store:           store,
 		Social:          socialService,
+		AI:              aiService,
 		Moments:         moments.NewService(db, socialService),
 		frontendDistDir: paths.distDir,
 		uploadsDir:      paths.uploadsDir,
@@ -89,6 +108,7 @@ func (s *Server) registerAPIRoutes(router *gin.Engine) {
 	s.registerFileRoutes(api)
 	s.registerFriendRoutes(api)
 	s.registerMomentRoutes(api)
+	s.registerAIRoutes(api)
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -111,6 +131,9 @@ func bearerToken(c *gin.Context) string {
 	header := c.GetHeader("Authorization")
 	if len(header) > 7 && header[:7] == "Bearer " {
 		return header[7:]
+	}
+	if token := strings.TrimSpace(c.Query("token")); token != "" {
+		return token
 	}
 	return ""
 }
@@ -170,7 +193,7 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return
 	}
 
-	client := webchat.NewClient(s.Hub, s.Store, s.Social, conn, user)
+	client := webchat.NewClient(s.Hub, s.Store, s.Social, s.AI, conn, user)
 	s.Hub.Register(client)
 	client.Start()
 }

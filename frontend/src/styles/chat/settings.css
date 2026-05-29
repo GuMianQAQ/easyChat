@@ -179,6 +179,11 @@
   transition: background-color 0.18s ease;
 }
 
+.settings-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .settings-switch-thumb {
   position: absolute;
   top: 2px;

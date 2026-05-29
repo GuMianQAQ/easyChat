@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil } from "lucide-react";
+import { ChevronRight, MessageCircle, MoreHorizontal, Pencil, Phone, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { ContactItem, ContactPermission, FriendItem, FriendRequestItem } from "../../types/chat";
@@ -6,7 +6,7 @@ import Avatar from "../common/Avatar";
 import ContactEditModal from "./ContactEditModal";
 import ContactsManagement from "./ContactsManagement";
 import FriendRequestsView from "./FriendRequestsView";
-import { genderLabel, permissionLabel, sourceLabel } from "./contactHelpers";
+import { permissionLabel, sourceLabel } from "./contactHelpers";
 
 interface ContactsDetailProps {
   managementOpen: boolean;
@@ -120,16 +120,17 @@ export default function ContactsDetail({
 
   const displayName = contact.remark || contact.name;
   const nicknameVisible = Boolean(contact.remark && contact.name);
-  const tagsText = contact.tags?.filter(Boolean).join("、") || "";
+  const tagsText = contact.tags?.filter(Boolean).join(" / ") || "";
   const signatureText = contact.signature?.trim() || "";
   const regionText = contact.region?.trim() || "";
   const phoneText = contact.phone?.trim() || "";
   const descriptionText = contact.description?.trim() || "";
-  const descriptionImages = Array.isArray(contact.descriptionImages) ? contact.descriptionImages : [];
-  const genderText = genderLabel(contact.gender);
+  const momentThumbs = Array.isArray(contact.descriptionImages) ? contact.descriptionImages.slice(0, 4) : [];
+  const genderSymbol = contact.gender === "male" ? "♂" : contact.gender === "female" ? "♀" : "";
   const addedAt = contact.addedAt || contact.lastSeenAt || "";
   const canEditRemark = contact.source === "manual";
   const canManageFriend = contact.source === "manual";
+  const isAIAssistant = contact.id === "ai-assistant";
 
   return (
     <div className="contacts-detail contacts-profile-page">
@@ -141,10 +142,18 @@ export default function ContactsDetail({
           <div className="contacts-profile-main">
             <div className="contacts-profile-name-line">
               <h2>{displayName}</h2>
-              {genderText ? <span className="contacts-profile-gender">{genderText}</span> : null}
+              {genderSymbol ? (
+                <span
+                  className={`contacts-profile-gender ${
+                    contact.gender === "male" ? "contacts-profile-gender-male" : "contacts-profile-gender-female"
+                  }`}
+                >
+                  {genderSymbol}
+                </span>
+              ) : null}
             </div>
             {nicknameVisible ? <p>昵称：{contact.name}</p> : null}
-            {contact.username ? <p>账号：{contact.username}</p> : null}
+            {contact.username ? <p>微信号：{contact.username}</p> : null}
             {regionText ? <p>地区：{regionText}</p> : null}
           </div>
           {canManageFriend ? (
@@ -216,6 +225,7 @@ export default function ContactsDetail({
         </div>
 
         <section className="contacts-profile-section">
+          <div className="contacts-profile-section-title">朋友资料</div>
           <ProfileRow
             label="备注"
             value={
@@ -282,56 +292,75 @@ export default function ContactsDetail({
           />
           <ProfileRow label="标签" value={tagsText || "未设置"} />
           <ProfileRow label="朋友权限" value={permissionLabel(contact.permission)} />
-          {canManageFriend ? (
-            <ProfileRow
-              label="朋友圈"
-              value="查看这位朋友的朋友圈"
-              action={
-                <button
-                  type="button"
-                  className="contact-profile-link"
-                  onClick={() => onOpenMoments(contact)}
-                >
-                  <span>打开</span>
-                </button>
-              }
-            />
-          ) : null}
           {phoneText ? <ProfileRow label="电话" value={phoneText} /> : null}
-          {descriptionText || descriptionImages.length > 0 ? (
-            <ProfileRow
-              label="描述"
-              value={
-                <div className="contact-profile-description">
-                  {descriptionText ? <div className="contact-profile-description-text">{descriptionText}</div> : null}
-                  {descriptionImages.length > 0 ? (
-                    <div className="contact-profile-description-images">
-                      {descriptionImages.map((image, index) => (
-                        <button type="button" key={`${image.url}-${index}`} className="contact-profile-description-image">
-                          <img src={image.url} alt="" />
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              }
-            />
-          ) : null}
+          {descriptionText ? <ProfileRow label="描述" value={descriptionText} /> : null}
         </section>
 
+        {canManageFriend && !isAIAssistant ? (
+          <section className="contacts-profile-section">
+            <button
+              type="button"
+              className={`contacts-profile-moments-row ${
+                momentThumbs.length ? "contacts-profile-moments-row-filled" : "contacts-profile-moments-row-empty"
+              }`}
+              onClick={() => onOpenMoments(contact)}
+            >
+              <span className="contacts-profile-moments-label">朋友圈</span>
+              <span className="contacts-profile-moments-content">
+                <span
+                  className={`contacts-profile-moments-entry ${
+                    momentThumbs.length ? "contacts-profile-moments-entry-filled" : "contacts-profile-moments-entry-empty"
+                  }`}
+                >
+                  {momentThumbs.length ? (
+                    <span className="contacts-profile-moments-grid">
+                      {momentThumbs.map((image, index) => (
+                        <span
+                          key={`${image.url}-${index}`}
+                          className="contacts-profile-moments-thumb"
+                          style={{ backgroundImage: `url(${image.url})` }}
+                        />
+                      ))}
+                    </span>
+                  ) : null}
+                  <span className="contacts-profile-moments-arrow">
+                    <ChevronRight size={14} />
+                  </span>
+                </span>
+              </span>
+            </button>
+          </section>
+        ) : null}
+
         <section className="contacts-profile-section">
+          <div className="contacts-profile-section-title">更多信息</div>
           {signatureText ? <ProfileRow label="个性签名" value={signatureText} /> : null}
           <ProfileRow label="来源" value={sourceLabel(contact)} />
           {addedAt ? <ProfileRow label="添加时间" value={addedAt.slice(0, 10)} /> : null}
         </section>
 
-        <div className="contacts-profile-actions">
-          {contact.source === "manual" || contact.source === "group" ? (
-            <button type="button" className="header-action header-action-primary" onClick={() => onOpenChat(contact)}>
-              发消息
+        {contact.source === "manual" || contact.source === "group" ? (
+          <div className={`contacts-profile-actions${isAIAssistant ? " contacts-profile-actions-ai" : ""}`}>
+            <button type="button" className="contacts-profile-action-tool" onClick={() => onOpenChat(contact)}>
+              <span className="contacts-profile-action-icon">
+                <MessageCircle size={24} />
+              </span>
+              <span className="contacts-profile-action-text">发消息</span>
             </button>
-          ) : null}
-        </div>
+            <button type="button" className="contacts-profile-action-tool contacts-profile-action-tool-disabled" disabled>
+              <span className="contacts-profile-action-icon">
+                <Phone size={24} />
+              </span>
+              <span className="contacts-profile-action-text">语音聊天</span>
+            </button>
+            <button type="button" className="contacts-profile-action-tool contacts-profile-action-tool-disabled" disabled>
+              <span className="contacts-profile-action-icon">
+                <Video size={24} />
+              </span>
+              <span className="contacts-profile-action-text">视频聊天</span>
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <ContactEditModal

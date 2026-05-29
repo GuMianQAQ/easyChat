@@ -28,6 +28,23 @@ import type {
   UserSettings,
 } from "../../types/chat";
 
+function profileSourceLabel(contact?: ContactItem) {
+  switch (contact?.source) {
+    case "self":
+      return "当前用户";
+    case "group":
+      return "通过群聊添加";
+    case "recent":
+      return "通过名片分享添加";
+    case "system":
+      return "系统联系人";
+    case "manual":
+      return "通过账号搜索添加";
+    default:
+      return "";
+  }
+}
+
 interface ChatShellState {
   visibleConversations: Conversation[];
   activeConversationId: string;
@@ -85,6 +102,7 @@ interface ChatShellActions {
       isMuted?: boolean;
     },
   ) => Promise<GroupConversationPayload | null>;
+  onUpdateGroupBotEnabled: (conversationId: string, botEnabled: boolean) => Promise<GroupConversationPayload | null>;
 }
 
 interface AppShellProps {
@@ -166,6 +184,7 @@ interface AppShellProps {
   onOpenSettingsFromProfile: () => void;
   onCloseProfileCard: () => void;
   onOpenSendRequestFromProfile: (profile: UserProfile) => void;
+  onOpenMomentsFromProfile: (profile: UserProfile) => void;
 }
 
 export default function AppShell({
@@ -241,6 +260,7 @@ export default function AppShell({
   onOpenSettingsFromProfile,
   onCloseProfileCard,
   onOpenSendRequestFromProfile,
+  onOpenMomentsFromProfile,
 }: AppShellProps) {
   return (
     <DesktopWindowFrame>
@@ -335,6 +355,7 @@ export default function AppShell({
                 onDismissGroupConversation={chatActions.onDismissGroupConversation}
                 onUploadImage={chatActions.onUploadImage}
                 onUpdateGroupConversation={chatActions.onUpdateGroupConversation}
+                onUpdateGroupBotEnabled={chatActions.onUpdateGroupBotEnabled}
               />
             ) : activeDock === "contacts" ? (
               <ContactsView.Detail
@@ -426,15 +447,37 @@ export default function AppShell({
         ) : null}
 
         {profileCard ? (
-          <UserProfileCard
-            profile={profileCard.profile}
-            anchor={{ x: profileCard.x, y: profileCard.y }}
-            onClose={onCloseProfileCard}
-            onOpenSettings={onOpenSettingsFromProfile}
-            onOpenChat={onOpenChatFromProfile}
-            onSendRequest={onOpenSendRequestFromProfile}
-            onOpenAvatarPreview={onOpenAvatarPreview}
-          />
+          (() => {
+            const matchedContact =
+              contactItems.find((item) => item.id === profileCard.profile.id) ||
+              starredContacts.find((item) => item.id === profileCard.profile.id);
+            const matchedFriend = friends.find((item) => item.friendId === profileCard.profile.id);
+
+            return (
+              <UserProfileCard
+                profile={profileCard.profile}
+                detail={{
+                  contact: matchedContact,
+                  remark: matchedContact?.remark || matchedFriend?.remark || "",
+                  tags: matchedContact?.tags || matchedFriend?.tags || [],
+                  sourceLabel: profileSourceLabel(matchedContact),
+                  addedAt: matchedContact?.addedAt || matchedFriend?.createdAt || "",
+                }}
+                anchor={{ x: profileCard.x, y: profileCard.y }}
+                onClose={onCloseProfileCard}
+                onOpenSettings={onOpenSettingsFromProfile}
+                onOpenChat={onOpenChatFromProfile}
+                onSendRequest={onOpenSendRequestFromProfile}
+                onOpenAvatarPreview={onOpenAvatarPreview}
+                onOpenMoments={onOpenMomentsFromProfile}
+                onOpenManagement={onOpenContactsManagement}
+                onUpdateContact={onUpdateContact}
+                onToggleBlock={onToggleBlock}
+                onDeleteFriend={onDeleteFriend}
+                onUploadImage={chatActions.onUploadImage}
+              />
+            );
+          })()
         ) : null}
       </>
     </DesktopWindowFrame>

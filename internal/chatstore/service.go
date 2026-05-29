@@ -1,6 +1,7 @@
 package chatstore
 
 import (
+	"log"
 	"os"
 	"time"
 
@@ -20,6 +21,7 @@ type Conversation struct {
 	Avatar       string `gorm:"type:text"`
 	Announcement string `gorm:"type:text"`
 	CreatedBy    string `gorm:"index;size:64"`
+	BotEnabled   bool   `gorm:"not null;default:false"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -159,6 +161,7 @@ type GroupConversationPayload struct {
 	MyNickname          string               `json:"myNickname"`
 	MyRole              string               `json:"myRole"`
 	CanEditGroupProfile bool                 `json:"canEditGroupProfile"`
+	BotEnabled          bool                 `json:"botEnabled"`
 	IsMuted             bool                 `json:"isMuted"`
 	MemberCount         int                  `json:"memberCount"`
 	Members             []GroupMemberPayload `json:"members"`
@@ -230,6 +233,9 @@ func NewService(db *gorm.DB, uploadsDir string) (*Service, error) {
 	service := &Service{db: db, uploadsDir: uploadsDir}
 	if err := service.cleanupLegacyPublicConversation(); err != nil {
 		return nil, err
+	}
+	if err := service.cleanupAIFromPrivateConversations(); err != nil {
+		log.Printf("warning: failed to cleanup AI from private conversations: %v", err)
 	}
 	if err := service.ensureBaseConversations(); err != nil {
 		return nil, err

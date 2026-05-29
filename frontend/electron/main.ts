@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen } from "electron";
+﻿import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen } from "electron";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -10,7 +10,7 @@ const PREVIEW_ICON_NAME = "mychat-small-normal-256.png";
 const PREVIEW_ICON_FALLBACK = "mychat-small-normal.png";
 const EMPTY_TRAY_ICON_NAME = "tray-empty.png";
 const DEFAULT_WINDOW_TITLE = "MyChat";
-const ATTENTION_WINDOW_TITLE = "MyChat - 有新消息";
+const ATTENTION_WINDOW_TITLE = "MyChat - New Messages";
 const DEFAULT_TRAY_TOOLTIP = "MyChat";
 const TRAY_BLINK_INTERVAL_MS = 500;
 const PREVIEW_HIDE_DELAY_MS = 300;
@@ -31,6 +31,25 @@ type AttentionPreviewPayload = {
 type AttentionOpenConversationPayload = {
   conversationId: string;
   activeDock: "chat";
+};
+
+type ProfileActionPayload = {
+  action: "chat" | "send-request" | "settings";
+  profile: {
+    id: string;
+    username: string;
+    nickname: string;
+    avatar: string;
+    gender?: "unknown" | "male" | "female";
+    region?: string;
+    signature?: string;
+    momentCover?: string;
+    isSelf: boolean;
+    isFriend: boolean;
+    requestStatus: string;
+    requestId?: string;
+    allowFriendRequest: boolean;
+  };
 };
 
 let mainWindow: BrowserWindow | null = null;
@@ -57,7 +76,7 @@ const attentionConversationIds = new Set<string>();
 let momentsWindowContext: { userId?: string } = {};
 
 const MOMENTS_WINDOW_WIDTH = 570;
-const MOMENTS_WINDOW_HEIGHT = 720;
+const MOMENTS_WINDOW_HEIGHT = 810;
 
 function normalizeMomentsContext(context?: { userId?: string } | null) {
   const userId = context?.userId?.trim();
@@ -197,6 +216,13 @@ function emitAttentionOpenConversation(conversationId: string) {
   mainWindow.webContents.send("mychat:attention-open-conversation", payload);
 }
 
+function emitProfileAction(payload: ProfileActionPayload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send("mychat:profile-action", payload);
+}
+
 function clearHidePreviewTimer() {
   if (!hidePreviewTimer) {
     return;
@@ -228,7 +254,7 @@ function sendAttentionPreviewUpdate() {
 
   notificationWindow.webContents.send("mychat:attention-preview", {
     title: latestAttentionTitle || "MyChat",
-    content: latestAttentionContent || "收到一条新消息",
+    content: latestAttentionContent || "鏀跺埌涓€鏉℃柊娑堟伅",
     count: latestAttentionCount > 0 ? latestAttentionCount : 1,
     avatar: resolveAttentionAvatarUrl(latestAttentionAvatar),
     conversationId: latestAttentionConversationId,
@@ -361,8 +387,8 @@ function buildAttentionPreviewHtml(defaultAvatarUrl: string) {
           <div class="title" id="title">MyChat</div>
           <div class="badge" id="badge">1</div>
         </div>
-        <div class="message" id="message">收到一条新消息</div>
-        <button class="dismiss" id="dismiss">暂不处理</button>
+        <div class="message" id="message">鏀跺埌涓€鏉℃柊娑堟伅</div>
+        <button class="dismiss" id="dismiss">鏆備笉澶勭悊</button>
       </div>
     </div>
     <script>
@@ -380,7 +406,7 @@ function buildAttentionPreviewHtml(defaultAvatarUrl: string) {
 
       const off = window.myChatAttentionPreview?.onUpdate((payload) => {
         titleEl.textContent = payload.title || "MyChat";
-        messageEl.textContent = payload.content || "收到一条新消息";
+        messageEl.textContent = payload.content || "鏀跺埌涓€鏉℃柊娑堟伅";
         badgeEl.textContent = payload.count > 99 ? "99+" : String(payload.count || 1);
         badgeEl.style.display = payload.count > 0 ? "block" : "none";
         avatarEl.src = payload.avatar || defaultAvatarUrl;
@@ -679,13 +705,14 @@ function showMomentsWindow(context?: { userId?: string }) {
   momentsWindow = new BrowserWindow({
     width: MOMENTS_WINDOW_WIDTH,
     height: MOMENTS_WINDOW_HEIGHT,
-    resizable: true,
+    resizable: false,
     minWidth: MOMENTS_WINDOW_WIDTH,
     maxWidth: MOMENTS_WINDOW_WIDTH,
-    minHeight: 520,
+    minHeight: MOMENTS_WINDOW_HEIGHT,
+    maxHeight: MOMENTS_WINDOW_HEIGHT,
     show: false,
     frame: false,
-    title: "朋友圈",
+    title: "Moments",
     autoHideMenuBar: true,
     backgroundColor: "#f5f5f7",
     webPreferences: {
@@ -748,13 +775,13 @@ function createTray() {
     t.popUpContextMenu(
       Menu.buildFromTemplate([
         {
-          label: "打开 MyChat",
+          label: "Open MyChat",
           click: () => {
             showMainWindow();
           },
         },
         {
-          label: "退出",
+          label: "Quit",
           click: () => {
             isQuitting = true;
             if (mainWindow && !mainWindow.isDestroyed()) {
@@ -885,6 +912,14 @@ ipcMain.handle("mychat-window:clear-attention-conversation", (_event, conversati
   return { remaining: attentionConversationIds.size };
 });
 
+ipcMain.handle("mychat-window:request-profile-action", (_event, payload: ProfileActionPayload) => {
+  if (!payload?.profile || !payload?.action) {
+    return;
+  }
+  showMainWindow();
+  emitProfileAction(payload);
+});
+
 ipcMain.handle("mychat-moments:open", (_event, context?: { userId?: string }) => {
   showMomentsWindow(context);
 });
@@ -959,3 +994,4 @@ app.on("will-quit", () => {
   tray?.destroy();
   tray = null;
 });
+

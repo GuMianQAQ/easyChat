@@ -2,7 +2,7 @@
 
 一个基于 **Go + Gin + WebSocket + React + Vite + TypeScript + Electron** 构建的实时聊天项目。
 
-项目支持账号登录、好友系统、私聊、群聊、消息收藏、消息搜索、文件中心、头像资料卡、黑名单管理、本地化设置以及桌面端运行，适合作为 Go 后端、WebSocket 通信、前后端分离和 Electron 桌面端开发的综合练习项目。
+项目支持账号登录、好友系统、私聊、群聊、消息收藏、消息搜索、文件中心、头像资料卡、黑名单管理、朋友圈、AI 助手、本地化设置以及桌面端运行，适合作为 Go 后端、WebSocket 通信、前后端分离和 Electron 桌面端开发的综合练习项目。
 
 ## 技术栈
 
@@ -75,6 +75,27 @@
 - 文件中心
 - 从收藏或文件记录跳转回原消息
 
+### 朋友圈
+
+- 发布动态（文字 + 图片）
+- 查看好友动态流
+- 点赞 / 取消点赞
+- 评论 / 删除评论
+- 删除自己的动态
+- 查看指定用户的朋友圈
+
+### AI 助手
+
+- AI 对话（同步 / SSE 流式）
+- 文本翻译
+- 消息摘要
+- 回复建议生成
+- 代码生成
+- 语义搜索
+- 使用统计
+- 群聊 AI 机器人开关
+- 支持 OpenAI 和 Ollama 两种后端
+
 ### 本地体验
 
 - 前端本地设置
@@ -87,17 +108,32 @@
 easyChat
 ├── main.go                 # 后端启动入口
 ├── API.md                  # 接口文档
+├── .env.example            # AI 服务配置模板
 ├── internal
+│   ├── ai                  # AI 助手服务（对话、翻译、摘要、代码生成）
 │   ├── auth                # 认证与用户资料
 │   ├── chatstore           # 会话、消息、群聊、收藏、文件等核心数据逻辑
 │   ├── database            # SQLite 初始化与数据库连接
+│   ├── moments             # 朋友圈（动态、点赞、评论）
 │   ├── social              # 好友与黑名单相关逻辑
 │   ├── webchat             # WebSocket Hub 与连接管理
 │   └── webserver           # HTTP 路由、接口处理与静态资源服务
-└── frontend
-    ├── src                 # React 前端源码
-    ├── electron            # Electron 桌面端入口与打包脚本
-    └── package.json
+├── frontend
+│   ├── src
+│   │   ├── components
+│   │   │   ├── chat        # 聊天界面
+│   │   │   ├── contacts    # 通讯录
+│   │   │   ├── favorites   # 收藏
+│   │   │   ├── files       # 文件中心
+│   │   │   ├── moments     # 朋友圈
+│   │   │   ├── settings    # 设置
+│   │   │   └── login       # 登录注册
+│   │   ├── hooks           # 自定义 Hooks
+│   │   ├── utils           # 工具函数
+│   │   └── types           # TypeScript 类型定义
+│   ├── electron            # Electron 桌面端入口与打包脚本
+│   └── package.json
+└── data                    # SQLite 数据库文件（运行时生成）
 ```
 
 ## 运行环境
@@ -135,6 +171,46 @@ go run . -addr 127.0.0.1:8080
 ```text
 data/chat.db
 ```
+
+## AI 功能配置
+
+AI 功能需要配置后端服务。复制配置模板并填入真实信息：
+
+```powershell
+cp .env.example .env
+```
+
+`.env` 文件说明：
+
+```text
+# AI 服务商：openai / ollama
+EASYCHAT_AI_PROVIDER=openai
+
+# API Key
+EASYCHAT_AI_API_KEY=your-api-key-here
+
+# 模型名称
+EASYCHAT_AI_MODEL=gpt-3.5-turbo
+
+# API 地址（留空使用默认值）
+EASYCHAT_AI_BASE_URL=
+
+# 功能开关（设为 false 关闭对应功能）
+EASYCHAT_AI_ENABLE_CHAT=true
+EASYCHAT_AI_ENABLE_STREAM=true
+EASYCHAT_AI_ENABLE_TOOLS=true
+EASYCHAT_AI_ENABLE_SEARCH=true
+```
+
+使用 Ollama 本地模型时：
+
+```text
+EASYCHAT_AI_PROVIDER=ollama
+EASYCHAT_AI_BASE_URL=http://localhost:11434/v1
+EASYCHAT_AI_MODEL=qwen2.5
+```
+
+AI 功能不配置时不影响其他功能正常使用。注册新账号后会自动添加 AI 好友。
 
 ## Web 前端开发运行
 
@@ -209,7 +285,7 @@ npm run desktop:build
 API.md
 ```
 
-接口文档包括认证、用户资料、好友系统、会话系统、消息系统、WebSocket、文件上传、文件中心、收藏系统等模块。
+接口文档包括认证、用户资料、好友系统、会话系统、消息系统、WebSocket、文件上传、文件中心、收藏系统、朋友圈、AI 助手等模块。
 
 ## 开发说明
 
@@ -218,6 +294,9 @@ API.md
 - 清空聊天记录只影响当前用户，不会删除全局消息，也不会影响对方。
 - 拉黑不会删除好友关系和历史消息，只会影响后续私聊权限。
 - 群成员退出群聊只影响当前成员，群主解散群聊会删除群聊相关数据。
+- 朋友圈动态仅对好友可见，拉黑后双方互相不可见对方动态。
+- AI 助手作为系统内置好友存在，注册时自动添加，无需手动配置。
+- `.env` 文件已加入 `.gitignore`，不会提交到仓库。
 
 ## 第三方说明
 

@@ -39,67 +39,75 @@ function DesktopTitleBar({ variant = "default" }: DesktopTitleBarProps) {
     return null;
   }
 
-  return (
-    <header className={`desktop-titlebar desktop-titlebar-${variant}`}>
+  const controls = (
+    <div className={`desktop-titlebar-controls desktop-titlebar-controls-${variant}`}>
       {supportsFullControls ? (
         <button
           type="button"
-          className={`desktop-titlebar-drag desktop-titlebar-drag-${variant}`}
-          aria-hidden="true"
-          tabIndex={-1}
-          onDoubleClick={() => {
+          className={`desktop-titlebar-button ${isAlwaysOnTop ? "desktop-titlebar-button-active" : ""}`}
+          aria-label={isAlwaysOnTop ? "Unpin window" : "Pin window"}
+          onClick={() => {
+            void window.myChatWindow?.toggleAlwaysOnTop();
+          }}
+        >
+          <Pin size={14} />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={`desktop-titlebar-button desktop-titlebar-button-${variant}`}
+        aria-label="Minimize"
+        onClick={() => {
+          void window.myChatWindow?.minimize();
+        }}
+      >
+        <Minus size={16} />
+      </button>
+      {supportsFullControls ? (
+        <button
+          type="button"
+          className="desktop-titlebar-button"
+          aria-label={isMaximized ? "Restore" : "Maximize"}
+          onClick={() => {
             void window.myChatWindow?.toggleMaximize();
           }}
-        />
-      ) : (
-        <div className={`desktop-titlebar-drag desktop-titlebar-drag-${variant}`} aria-hidden="true" />
-      )}
-      <div className="desktop-titlebar-controls">
-        {supportsFullControls ? (
-          <button
-            type="button"
-            className={`desktop-titlebar-button ${isAlwaysOnTop ? "desktop-titlebar-button-active" : ""}`}
-            aria-label={isAlwaysOnTop ? "Unpin window" : "Pin window"}
-            onClick={() => {
-              void window.myChatWindow?.toggleAlwaysOnTop();
-            }}
-          >
-            <Pin size={14} />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={`desktop-titlebar-button desktop-titlebar-button-${variant}`}
-          aria-label="Minimize"
-          onClick={() => {
-            void window.myChatWindow?.minimize();
-          }}
         >
-          <Minus size={16} />
+          {isMaximized ? <Copy size={13} /> : <Square size={13} />}
         </button>
-        {supportsFullControls ? (
-          <button
-            type="button"
-            className="desktop-titlebar-button"
-            aria-label={isMaximized ? "Restore" : "Maximize"}
-            onClick={() => {
-              void window.myChatWindow?.toggleMaximize();
-            }}
-          >
-            {isMaximized ? <Copy size={13} /> : <Square size={13} />}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={`desktop-titlebar-button desktop-titlebar-button-${variant} desktop-titlebar-button-close`}
-          aria-label="Close"
-          onClick={() => {
-            void window.myChatWindow?.close();
-          }}
-        >
-          <X size={15} />
-        </button>
-      </div>
+      ) : null}
+      <button
+        type="button"
+        className={`desktop-titlebar-button desktop-titlebar-button-${variant} desktop-titlebar-button-close`}
+        aria-label="Close"
+        onClick={() => {
+          void window.myChatWindow?.close();
+        }}
+      >
+        <X size={15} />
+      </button>
+    </div>
+  );
+
+  if (variant === "moments") {
+    return (
+      <header className="desktop-titlebar desktop-titlebar-moments">
+        <div className="desktop-titlebar-drag desktop-titlebar-drag-moments" aria-hidden="true" />
+      </header>
+    );
+  }
+
+  return (
+    <header className={`desktop-titlebar desktop-titlebar-${variant}`}>
+      <button
+        type="button"
+        className={`desktop-titlebar-drag desktop-titlebar-drag-${variant}`}
+        aria-hidden="true"
+        tabIndex={-1}
+        onDoubleClick={() => {
+          void window.myChatWindow?.toggleMaximize();
+        }}
+      />
+      {controls}
     </header>
   );
 }

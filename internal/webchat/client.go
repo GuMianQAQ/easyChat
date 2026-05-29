@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"easyChat/internal/ai"
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
 	"easyChat/internal/social"
@@ -24,6 +25,7 @@ type Client struct {
 	hub      *Hub
 	store    *chatstore.Service
 	social   *social.Service
+	ai       *ai.Service
 	conn     *websocket.Conn
 	send     chan []byte
 	UserID   string
@@ -32,11 +34,12 @@ type Client struct {
 	Avatar   string
 }
 
-func NewClient(hub *Hub, store *chatstore.Service, socialService *social.Service, conn *websocket.Conn, user auth.PublicUser) *Client {
+func NewClient(hub *Hub, store *chatstore.Service, socialService *social.Service, aiService *ai.Service, conn *websocket.Conn, user auth.PublicUser) *Client {
 	return &Client{
 		hub:      hub,
 		store:    store,
 		social:   socialService,
+		ai:       aiService,
 		conn:     conn,
 		send:     make(chan []byte, 64),
 		UserID:   strings.TrimSpace(user.ID),
@@ -147,16 +150,45 @@ func (c *Client) readPump() {
 				c.sendError(err.Error())
 				continue
 			}
+
 			if validated.MessageScope == ScopePrivate {
 				targetUserID, err := privateTargetUserID(validated.ConversationID, c.UserID)
 				if err != nil {
 					c.sendError(err.Error())
 					continue
 				}
+				if validated.MessageType == ChatMessageText && targetUserID == ai.SystemUserID {
+					aiContent := strings.TrimSpace(validated.Content)
+					if !strings.HasPrefix(aiContent, "/ai") {
+						aiContent = "/ai " + aiContent
+					}
+					c.handleAICommand(currentUser, validated, aiContent)
+					continue
+				}
+				if validated.MessageType == ChatMessageText && strings.HasPrefix(strings.TrimSpace(validated.Content), "/ai") {
+					c.sendError("私聊不支持 AI 功能，请使用 AI 助手会话")
+					continue
+				}
 				if err := c.social.CanSendPrivateMessage(c.UserID, targetUserID); err != nil {
 					c.sendError(err.Error())
 					continue
 				}
+			}
+
+			if validated.MessageType == ChatMessageText && strings.HasPrefix(strings.TrimSpace(validated.Content), "/ai") {
+				if validated.MessageScope == ScopeGroup {
+					botEnabled, err := c.store.IsGroupBotEnabled(c.UserID, validated.ConversationID)
+					if err != nil {
+						c.sendError(err.Error())
+						continue
+					}
+					if !botEnabled {
+						c.sendError("群机器人未开启")
+						continue
+					}
+				}
+				c.handleAICommand(currentUser, validated, validated.Content)
+				continue
 			}
 
 			message, err := c.store.SaveMessage(currentUser, chatstore.PersistMessageInput{
@@ -189,16 +221,14 @@ func (c *Client) readPump() {
 				continue
 			}
 			c.hub.Broadcast(wireMessage)
+
 		case MessageTypeRevoke:
-			result, err := c.store.RevokeMessage(
-				currentUser,
-				strings.TrimSpace(input.ID),
-				strings.TrimSpace(input.ConversationID),
-			)
+			result, err := c.store.RevokeMessage(currentUser, strings.TrimSpace(input.ID), strings.TrimSpace(input.ConversationID))
 			if err != nil {
 				c.sendError(err.Error())
 				continue
 			}
+
 			wireMessage := payloadToWire(result.Message)
 			if wireMessage.MessageScope == ScopePrivate && result.TargetUserID != "" {
 				c.hub.BroadcastPrivate(wireMessage, c.UserID, result.TargetUserID)
@@ -214,6 +244,7 @@ func (c *Client) readPump() {
 				continue
 			}
 			c.hub.Broadcast(wireMessage)
+
 		default:
 			c.sendError("不支持的消息类型")
 		}
@@ -247,6 +278,7 @@ func (c *Client) writePump() {
 			if err := writer.Close(); err != nil {
 				return
 			}
+
 		case <-ticker.C:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
@@ -280,4 +312,30 @@ func privateTargetUserID(conversationID, currentUserID string) (string, error) {
 		return parts[1], nil
 	}
 	return "", nil
+}
+
+func (c *Client) handleAICommand(user auth.PublicUser, validated *ValidatedInput, content string) {
+	go func() {
+		payload, err := c.ai.HandleMessage(user, validated.ConversationID, validated.MessageScope, content)
+		if err != nil {
+			c.sendError(err.Error())
+			return
+		}
+
+		wireMessage := payloadToWire(*payload)
+		if wireMessage.MessageScope == ScopePrivate {
+			c.hub.BroadcastPrivate(wireMessage, c.UserID)
+			return
+		}
+		if wireMessage.MessageScope == ScopeGroup {
+			memberIDs, err := c.store.ConversationMemberIDs(c.UserID, wireMessage.ConversationID)
+			if err != nil {
+				log.Printf("failed to get conversation members: %v", err)
+				return
+			}
+			c.hub.BroadcastPrivate(wireMessage, memberIDs...)
+			return
+		}
+		c.hub.Broadcast(wireMessage)
+	}()
 }

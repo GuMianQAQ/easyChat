@@ -36,8 +36,6 @@ function ContactEditModal({ open, contact, onClose, onSave, onUploadImage }: Con
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const tagsText = tags;
-
   useEffect(() => {
     if (!open) {
       setImageMenu(null);
@@ -45,7 +43,7 @@ function ContactEditModal({ open, contact, onClose, onSave, onUploadImage }: Con
       return;
     }
     setRemark(contact.remark || "");
-    setTags((contact.tags || []).join("、"));
+    setTags((contact.tags || []).join(" / "));
     setPhone(contact.phone || "");
     setDescription(contact.description || "");
     setImages(normalizeImages(contact.descriptionImages));
@@ -111,8 +109,8 @@ function ContactEditModal({ open, contact, onClose, onSave, onUploadImage }: Con
     try {
       onSave({
         remark: remark.trim(),
-        tags: tagsText
-          .split(/[，,、\n]/)
+        tags: tags
+          .split(/[\/,\n]/)
           .map((item) => item.trim())
           .filter(Boolean),
         phone: phone.trim(),
@@ -181,7 +179,7 @@ function ContactEditModal({ open, contact, onClose, onSave, onUploadImage }: Con
             <span className="contact-edit-label">标签</span>
             <input
               className="contact-edit-input"
-              value={tagsText}
+              value={tags}
               placeholder="添加标签"
               maxLength={96}
               onChange={(event) => setTags(event.target.value)}
@@ -246,10 +244,7 @@ function ContactEditModal({ open, contact, onClose, onSave, onUploadImage }: Con
           </div>
 
           {imageMenu && selectedImage ? (
-            <div
-              className="contact-edit-image-menu"
-              style={{ left: `${menuLeft}px`, top: `${menuTop}px` }}
-            >
+            <div className="contact-edit-image-menu" style={{ left: `${menuLeft}px`, top: `${menuTop}px` }}>
               <button
                 type="button"
                 className="contact-edit-image-menu-item"

@@ -17,6 +17,7 @@ const (
 	RequestPending  = "pending"
 	RequestAccepted = "accepted"
 	RequestRejected = "rejected"
+	systemFriendID  = "ai-assistant"
 )
 
 type Friendship struct {
@@ -381,7 +382,10 @@ func (s *Service) RejectFriendRequest(userID, requestID string) error {
 
 func (s *Service) ListFriends(userID string) ([]FriendItem, error) {
 	var friendships []Friendship
-	if err := s.db.Where("user_id = ?", strings.TrimSpace(userID)).Order("created_at asc").Find(&friendships).Error; err != nil {
+	if err := s.db.
+		Where("user_id = ?", strings.TrimSpace(userID)).
+		Order(fmt.Sprintf("CASE WHEN friend_id = '%s' THEN 0 ELSE 1 END, created_at asc", systemFriendID)).
+		Find(&friendships).Error; err != nil {
 		return nil, err
 	}
 
@@ -394,6 +398,35 @@ func (s *Service) ListFriends(userID string) ([]FriendItem, error) {
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (s *Service) EnsureSystemFriend(userID string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		return s.ensureSystemFriendTx(tx, strings.TrimSpace(userID))
+	})
+}
+
+func (s *Service) EnsureSystemFriendInTx(tx *gorm.DB, userID string) error {
+	return s.ensureSystemFriendTx(tx, strings.TrimSpace(userID))
+}
+
+func (s *Service) EnsureSystemFriendForAllUsers() error {
+	var users []auth.User
+	if err := s.db.
+		Where("id <> ?", systemFriendID).
+		Select("id").
+		Find(&users).Error; err != nil {
+		return err
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		for _, user := range users {
+			if err := s.ensureSystemFriendTx(tx, user.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Service) UpdateFriend(userID, friendID string, input UpdateFriendRequest) (FriendItem, error) {
@@ -592,6 +625,24 @@ func (s *Service) createFriendshipPair(left, right auth.User) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		return createFriendshipPairTx(tx, left, right)
 	})
+}
+
+func (s *Service) ensureSystemFriendTx(tx *gorm.DB, userID string) error {
+	if userID == "" || userID == systemFriendID {
+		return nil
+	}
+
+	var user auth.User
+	if err := tx.Select("id").First(&user, "id = ?", userID).Error; err != nil {
+		return err
+	}
+
+	var systemUser auth.User
+	if err := tx.Select("id").First(&systemUser, "id = ?", systemFriendID).Error; err != nil {
+		return err
+	}
+
+	return createFriendshipPairTx(tx, user, systemUser)
 }
 
 func createFriendshipPairTx(tx *gorm.DB, left, right auth.User) error {

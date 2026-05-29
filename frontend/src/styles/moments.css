@@ -2,15 +2,69 @@
    Moments — Cover-led social surface
    ========================================== */
 
+.moments-window-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  -webkit-app-region: drag;
+  pointer-events: auto;
+}
+
 .moments-surface {
   position: absolute;
   inset: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: var(--bg-main, #f5f5f7);
-  -webkit-app-region: drag;
+  background: transparent;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.moments-window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 10020;
+  display: flex;
+  width: 84px;
+  height: 30px;
+  pointer-events: auto !important;
+  -webkit-app-region: no-drag !important;
+}
+
+.moments-window-controls *,
+.moments-window-control-button,
+.moments-window-control-button * {
   pointer-events: auto;
+  -webkit-app-region: no-drag !important;
+}
+
+.moments-window-control-button {
+  width: 42px;
+  height: 30px;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  cursor: default;
+}
+
+.moments-window-control-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.moments-window-control-button-close:hover {
+  background: rgba(239, 68, 68, 0.28);
+}
+
+.moments-window-control-button svg {
+  pointer-events: none;
 }
 
 .moments-feedback {
@@ -25,6 +79,7 @@
   line-height: 1.4;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .moments-feedback-success {
@@ -47,7 +102,7 @@
 .moments-hero {
   flex: 0 0 auto;
   position: relative;
-  -webkit-app-region: drag;
+  pointer-events: none;
 }
 
 .moments-hero-cover {
@@ -57,39 +112,24 @@
   background-repeat: no-repeat;
   background-size: cover;
   cursor: default;
-  -webkit-app-region: drag;
+  pointer-events: none;
 }
 
 .moments-hero-cover-action-zone {
   position: absolute;
-  top: 48px;
+  top: 18px;
   left: 18px;
-  min-width: 58px;
-  height: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(10px);
-  padding: 0 12px;
+  width: 72px;
+  height: 56px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  padding: 0;
   margin: 0;
   cursor: default;
   z-index: 1;
   -webkit-app-region: no-drag;
-  color: transparent;
-  font-size: 0;
-  line-height: 1;
-  letter-spacing: 0.08em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.moments-hero-cover-action-zone::before {
-  content: "Cover";
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 12px;
-  line-height: 1;
-  letter-spacing: 0.08em;
+  pointer-events: auto;
 }
 
 .moments-hero-cover-default {
@@ -108,6 +148,11 @@
   align-items: center;
   gap: 14px;
   z-index: 2;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.moments-hero-identity * {
   -webkit-app-region: no-drag;
 }
 
@@ -164,6 +209,12 @@
   max-width: 640px;
   margin: 0 auto;
   width: 100%;
+  -webkit-app-region: no-drag;
+  pointer-events: none;
+}
+
+.moments-stream > * {
+  pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 
@@ -347,6 +398,28 @@
 
 .moments-stream-empty {
   flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(71, 85, 105, 0.82);
+  text-align: center;
+  padding: 28px 20px 36px;
+}
+
+.moments-stream-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(51, 65, 85, 0.92);
+}
+
+.moments-stream-empty-subtitle {
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(100, 116, 139, 0.92);
 }
 
 /* ---------- Post (content block) ---------- */
@@ -701,6 +774,7 @@
   inset: 0;
   z-index: 999;
   -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .moments-cover-menu {
@@ -712,6 +786,7 @@
   background: #fff;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
   -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .moments-cover-menu-item {
@@ -749,6 +824,7 @@
   background: rgba(15, 23, 42, 0.82);
   cursor: pointer;
   -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .moments-cover-preview-image {

@@ -11,7 +11,7 @@ interface AvatarProps {
 
 function hashColor(name: string): string {
   const palette = ["#d4e7c5", "#f1d8b5", "#d7e6f5", "#e5d8f2", "#cfe9de", "#f4d2d2"];
-  const normalized = name.trim() || "访客";
+  const normalized = name.trim() || "Guest";
   let hash = 0;
 
   for (let index = 0; index < normalized.length; index += 1) {
@@ -24,7 +24,7 @@ function hashColor(name: string): string {
 function initials(name: string): string {
   const normalized = name.trim();
   if (!normalized) {
-    return "访";
+    return "?";
   }
   return normalized.slice(0, 2).toUpperCase();
 }

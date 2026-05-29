@@ -1,6 +1,7 @@
 import {
   Copy,
   Expand,
+  Languages,
   MessageCircleMore,
   Quote,
   RotateCcw,
@@ -32,6 +33,7 @@ interface MessageListProps {
   onDeleteLocal: (messageId: string) => void;
   onRevoke: (message: ChatMessage) => void;
   onRetry: (messageId: string) => void;
+  onTranslate?: (message: ChatMessage) => void;
 }
 
 interface ContextMenuState {
@@ -77,6 +79,7 @@ function MessageList({
   onDeleteLocal,
   onRevoke,
   onRetry,
+  onTranslate,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +183,17 @@ function MessageList({
           setContextMenu(null);
         },
       });
+      if (onTranslate) {
+        actions.push({
+          key: "translate",
+          label: "翻译",
+          icon: <Languages size={14} />,
+          onClick: () => {
+            onTranslate(message);
+            setContextMenu(null);
+          },
+        });
+      }
     } else if (!message.revoked && message.messageType === "image") {
       actions.push({
         key: "preview",

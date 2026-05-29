@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"easyChat/internal/ai"
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
 	"easyChat/internal/moments"
@@ -47,5 +48,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&moments.Moment{},
 		&moments.MomentLike{},
 		&moments.MomentComment{},
+		&ai.AIConversation{},
+		&ai.AIEmbedding{},
 	)
 }

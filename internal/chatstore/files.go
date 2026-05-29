@@ -2,6 +2,7 @@ package chatstore
 
 import (
 	"errors"
+	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -13,13 +14,13 @@ import (
 
 func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 	if file == nil {
-		return "", errors.New("缂哄皯鍥剧墖")
+		return "", errors.New("缺少图片")
 	}
 	if file.Size > MaxUploadBytes {
-		return "", errors.New("鍥剧墖瓒呰繃 2MB")
+		return "", errors.New("图片超过 2MB")
 	}
 	if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
-		return "", errors.New("浠呮敮鎸佸浘鐗?")
+		return "", errors.New("仅支持图片")
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))
@@ -27,20 +28,7 @@ func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 		extension = ".png"
 	}
 	targetPath := filepath.Join(s.uploadsDir, newID("upload")+extension)
-
-	src, err := file.Open()
-	if err != nil {
-		return "", err
-	}
-	defer src.Close()
-
-	dst, err := os.Create(targetPath)
-	if err != nil {
-		return "", err
-	}
-	defer dst.Close()
-
-	if _, err := dst.ReadFrom(src); err != nil {
+	if err := copyUploadedFile(file, targetPath); err != nil {
 		return "", err
 	}
 	return "/uploads/" + filepath.Base(targetPath), nil
@@ -48,10 +36,10 @@ func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 
 func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileHeader) (FilePayload, error) {
 	if file == nil {
-		return FilePayload{}, errors.New("璇蜂笂浼犳枃浠?")
+		return FilePayload{}, errors.New("请上传文件")
 	}
 	if file.Size > 10*1024*1024 {
-		return FilePayload{}, errors.New("鏂囦欢瓒呰繃 10MB")
+		return FilePayload{}, errors.New("文件超过 10MB")
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))
@@ -62,20 +50,7 @@ func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileH
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return FilePayload{}, err
 	}
-
-	src, err := file.Open()
-	if err != nil {
-		return FilePayload{}, err
-	}
-	defer src.Close()
-
-	dst, err := os.Create(targetPath)
-	if err != nil {
-		return FilePayload{}, err
-	}
-	defer dst.Close()
-
-	if _, err := dst.ReadFrom(src); err != nil {
+	if err := copyUploadedFile(file, targetPath); err != nil {
 		return FilePayload{}, err
 	}
 
@@ -151,4 +126,21 @@ func fileKind(fileName, mimeType string) string {
 		return "document"
 	}
 	return "other"
+}
+
+func copyUploadedFile(file *multipart.FileHeader, targetPath string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	return err
 }

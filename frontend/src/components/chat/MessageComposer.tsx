@@ -10,6 +10,7 @@ interface MessageComposerProps {
   content: string;
   disabled: boolean;
   disabledReason?: string;
+  placeholderText?: string;
   enterToSend: boolean;
   clearAfterSend: boolean;
   quote?: MessageQuote | null;
@@ -26,6 +27,7 @@ function MessageComposer({
   content,
   disabled,
   disabledReason = "",
+  placeholderText = "输入消息",
   enterToSend,
   clearAfterSend,
   quote,
@@ -97,7 +99,7 @@ function MessageComposer({
   }, [activeConversationId]);
 
   useEffect(() => {
-    const handlePointer = (event: MouseEvent | globalThis.MouseEvent) => {
+    const handlePointer = (event: MouseEvent) => {
       if (!emojiOpen) {
         return;
       }
@@ -145,8 +147,8 @@ function MessageComposer({
         <button
           type="button"
           title="截图"
-        onClick={async () => {
-          const sent = await onCaptureScreen(quote);
+          onClick={async () => {
+            const sent = await onCaptureScreen(quote);
             if (sent) {
               onClearQuote();
             }
@@ -163,7 +165,7 @@ function MessageComposer({
           value={content}
           maxLength={500}
           disabled={disabled}
-          placeholder={disabled ? disabledReason || "连接后才能发送消息" : "输入消息"}
+          placeholder={disabled ? disabledReason || "连接后才能发送消息" : placeholderText}
           onChange={(event) => {
             onContentChange(event.target.value);
             syncSelection();

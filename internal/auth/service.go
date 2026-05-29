@@ -18,7 +18,32 @@ import (
 	"gorm.io/gorm"
 )
 
-const tokenTTL = 24 * time.Hour
+const (
+	tokenTTL = 24 * time.Hour
+
+	errPasswordsMismatch      = "两次输入的密码不一致"
+	errCaptchaRequired        = "请输入验证码"
+	errCaptchaInvalid         = "验证码错误"
+	errAccountExists          = "账号已存在"
+	errUsernameRequired       = "请输入账号"
+	errPasswordRequired       = "请输入密码"
+	errCredentialsInvalid     = "账号或密码错误"
+	errAuthExpired            = "登录已过期，请重新登录"
+	errOldPasswordRequired    = "请输入旧密码"
+	errNewPasswordRequired    = "请输入新密码"
+	errConfirmPasswordMissing = "请输入确认密码"
+	errNewPasswordMismatch    = "两次输入的新密码不一致"
+	errPasswordLengthRange    = "密码长度需为 6-32 位"
+	errPasswordSameAsOld      = "新密码不能和旧密码一样"
+	errOldPasswordInvalid     = "旧密码错误"
+	errUsernameFormat         = "账号需为 3-20 位字母、数字或下划线"
+	errPasswordTooShort       = "密码至少 6 位"
+	errNicknameRequired       = "昵称不能为空"
+	errNicknameTooLong        = "昵称最多 20 个字符"
+	errGenderInvalid          = "性别参数无效"
+	errRegionTooLong          = "地区最多 40 个字符"
+	errSignatureTooLong       = "个性签名最多 100 个字符"
+)
 
 var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,20}$`)
 
@@ -86,9 +111,10 @@ type ChangePasswordRequest struct {
 }
 
 type Service struct {
-	db       *gorm.DB
-	captchas *CaptchaStore
-	secret   []byte
+	db            *gorm.DB
+	captchas      *CaptchaStore
+	secret        []byte
+	afterRegister func(tx *gorm.DB, user User) error
 }
 
 func NewService(db *gorm.DB) (*Service, error) {
@@ -117,17 +143,17 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 		return AuthResponse{}, err
 	}
 	if confirmPassword := strings.TrimSpace(req.ConfirmPassword); confirmPassword != "" && req.Password != confirmPassword {
-		return AuthResponse{}, errors.New("两次输入的密码不一致")
+		return AuthResponse{}, errors.New(errPasswordsMismatch)
 	}
 	nickname, err := normalizeNickname(req.Nickname)
 	if err != nil {
 		return AuthResponse{}, err
 	}
 	if strings.TrimSpace(req.CaptchaID) == "" || strings.TrimSpace(req.CaptchaCode) == "" {
-		return AuthResponse{}, errors.New("璇疯緭鍏ラ獙璇佺爜")
+		return AuthResponse{}, errors.New(errCaptchaRequired)
 	}
 	if !s.captchas.Verify(req.CaptchaID, req.CaptchaCode) {
-		return AuthResponse{}, errors.New("验证码错误")
+		return AuthResponse{}, errors.New(errCaptchaInvalid)
 	}
 
 	var count int64
@@ -135,7 +161,7 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 		return AuthResponse{}, err
 	}
 	if count > 0 {
-		return AuthResponse{}, errors.New("账号已存在")
+		return AuthResponse{}, errors.New(errAccountExists)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -143,41 +169,56 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 		return AuthResponse{}, err
 	}
 
-	user := User{
-		ID:                  newID("usr"),
-		Username:            username,
-		PasswordHash:        string(hash),
-		Nickname:            nickname,
-		Avatar:              strings.TrimSpace(req.Avatar),
-		Gender:              "unknown",
-		Region:              "",
-		Signature:           "",
-		AllowSearch:         true,
-		AllowFriendRequest:  true,
-		RequireFriendVerify: true,
-	}
-	if err := s.db.Create(&user).Error; err != nil {
+	var user User
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		user = User{
+			ID:                  newID("usr"),
+			Username:            username,
+			PasswordHash:        string(hash),
+			Nickname:            nickname,
+			Avatar:              strings.TrimSpace(req.Avatar),
+			Gender:              "unknown",
+			Region:              "",
+			Signature:           "",
+			AllowSearch:         true,
+			AllowFriendRequest:  true,
+			RequireFriendVerify: true,
+		}
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		if s.afterRegister != nil {
+			if err := s.afterRegister(tx, user); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return AuthResponse{}, err
 	}
 
 	return s.authResponse(user)
 }
 
+func (s *Service) SetAfterRegister(fn func(tx *gorm.DB, user User) error) {
+	s.afterRegister = fn
+}
+
 func (s *Service) Login(req LoginRequest) (AuthResponse, error) {
 	username := strings.TrimSpace(req.Username)
 	if username == "" {
-		return AuthResponse{}, errors.New("请输入账号")
+		return AuthResponse{}, errors.New(errUsernameRequired)
 	}
 	if req.Password == "" {
-		return AuthResponse{}, errors.New("请输入密码")
+		return AuthResponse{}, errors.New(errPasswordRequired)
 	}
 
 	var user User
 	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
-		return AuthResponse{}, errors.New("账号或密码错误")
+		return AuthResponse{}, errors.New(errCredentialsInvalid)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return AuthResponse{}, errors.New("账号或密码错误")
+		return AuthResponse{}, errors.New(errCredentialsInvalid)
 	}
 
 	return s.authResponse(user)
@@ -191,7 +232,7 @@ func (s *Service) UserFromToken(token string) (PublicUser, error) {
 
 	var user User
 	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
-		return PublicUser{}, errors.New("登录已过期，请重新登录")
+		return PublicUser{}, errors.New(errAuthExpired)
 	}
 	return publicUser(user), nil
 }
@@ -204,7 +245,7 @@ func (s *Service) UpdateProfile(token string, req UpdateProfileRequest) (PublicU
 
 	var user User
 	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
-		return PublicUser{}, errors.New("登录已过期，请重新登录")
+		return PublicUser{}, errors.New(errAuthExpired)
 	}
 
 	if req.Nickname != nil {
@@ -258,30 +299,30 @@ func (s *Service) ChangePassword(token string, req ChangePasswordRequest) error 
 	newPassword := strings.TrimSpace(req.NewPassword)
 	confirmPassword := strings.TrimSpace(req.ConfirmPassword)
 	if oldPassword == "" {
-		return errors.New("请输入旧密码")
+		return errors.New(errOldPasswordRequired)
 	}
 	if newPassword == "" {
-		return errors.New("请输入新密码")
+		return errors.New(errNewPasswordRequired)
 	}
 	if confirmPassword == "" {
-		return errors.New("请输入确认密码")
+		return errors.New(errConfirmPasswordMissing)
 	}
 	if newPassword != confirmPassword {
-		return errors.New("两次输入的新密码不一致")
+		return errors.New(errNewPasswordMismatch)
 	}
 	if utf8.RuneCountInString(newPassword) < 6 || utf8.RuneCountInString(newPassword) > 32 {
-		return errors.New("密码长度需为 6-32 位")
+		return errors.New(errPasswordLengthRange)
 	}
 	if oldPassword == newPassword {
-		return errors.New("新密码不能和旧密码一样")
+		return errors.New(errPasswordSameAsOld)
 	}
 
 	var user User
 	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
-		return errors.New("登录已过期，请重新登录")
+		return errors.New(errAuthExpired)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
-		return errors.New("旧密码错误")
+		return errors.New(errOldPasswordInvalid)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
@@ -341,25 +382,25 @@ func (s *Service) createToken(userID string) (string, error) {
 func (s *Service) verifyToken(token string) (tokenClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return tokenClaims{}, errors.New("登录已过期，请重新登录")
+		return tokenClaims{}, errors.New(errAuthExpired)
 	}
 
 	expected := sign(parts[0]+"."+parts[1], s.secret)
 	if !hmac.Equal([]byte(expected), []byte(parts[2])) {
-		return tokenClaims{}, errors.New("登录已过期，请重新登录")
+		return tokenClaims{}, errors.New(errAuthExpired)
 	}
 
 	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return tokenClaims{}, errors.New("登录已过期，请重新登录")
+		return tokenClaims{}, errors.New(errAuthExpired)
 	}
 
 	var claims tokenClaims
 	if err := json.Unmarshal(raw, &claims); err != nil {
-		return tokenClaims{}, errors.New("登录已过期，请重新登录")
+		return tokenClaims{}, errors.New(errAuthExpired)
 	}
 	if claims.UserID == "" || claims.Exp < time.Now().Unix() {
-		return tokenClaims{}, errors.New("登录已过期，请重新登录")
+		return tokenClaims{}, errors.New(errAuthExpired)
 	}
 	return claims, nil
 }
@@ -373,20 +414,20 @@ func sign(value string, secret []byte) string {
 func normalizeUsername(username string) (string, error) {
 	trimmed := strings.TrimSpace(username)
 	if trimmed == "" {
-		return "", errors.New("请输入账号")
+		return "", errors.New(errUsernameRequired)
 	}
 	if !usernamePattern.MatchString(trimmed) {
-		return "", errors.New("账号需为 3-20 位字母、数字或下划线")
+		return "", errors.New(errUsernameFormat)
 	}
 	return trimmed, nil
 }
 
 func validatePassword(password string) error {
 	if password == "" {
-		return errors.New("请输入密码")
+		return errors.New(errPasswordRequired)
 	}
 	if utf8.RuneCountInString(password) < 6 {
-		return errors.New("密码至少 6 位")
+		return errors.New(errPasswordTooShort)
 	}
 	return nil
 }
@@ -394,10 +435,10 @@ func validatePassword(password string) error {
 func normalizeNickname(nickname string) (string, error) {
 	trimmed := strings.TrimSpace(nickname)
 	if trimmed == "" {
-		return "", errors.New("鏄电О涓嶈兘涓虹┖")
+		return "", errors.New(errNicknameRequired)
 	}
 	if count := utf8.RuneCountInString(trimmed); count < 1 || count > 20 {
-		return "", errors.New("昵称最多 20 个字符")
+		return "", errors.New(errNicknameTooLong)
 	}
 	return trimmed, nil
 }
@@ -409,7 +450,7 @@ func normalizeGender(gender string) (string, error) {
 	case "male", "female":
 		return strings.TrimSpace(gender), nil
 	default:
-		return "", errors.New("鎬у埆鍙傛暟鏃犳晥")
+		return "", errors.New(errGenderInvalid)
 	}
 }
 
@@ -425,7 +466,7 @@ func safeGender(gender string) string {
 func normalizeRegion(region string) (string, error) {
 	trimmed := strings.TrimSpace(region)
 	if utf8.RuneCountInString(trimmed) > 40 {
-		return "", errors.New("地区最多 40 个字符")
+		return "", errors.New(errRegionTooLong)
 	}
 	return trimmed, nil
 }
@@ -433,7 +474,7 @@ func normalizeRegion(region string) (string, error) {
 func normalizeSignature(signature string) (string, error) {
 	trimmed := strings.TrimSpace(signature)
 	if utf8.RuneCountInString(trimmed) > 100 {
-		return "", errors.New("个性签名最多 100 个字符")
+		return "", errors.New(errSignatureTooLong)
 	}
 	return trimmed, nil
 }

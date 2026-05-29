@@ -101,6 +101,22 @@ export async function updateGroupConversation(
   return response.conversation;
 }
 
+export async function updateGroupBotEnabled(
+  token: string,
+  conversationId: string,
+  botEnabled: boolean,
+): Promise<GroupConversationPayload> {
+  const response = await requestJSON<{ conversation: GroupConversationPayload }>(
+    `/api/groups/${encodeURIComponent(conversationId)}/bot`,
+    {
+      method: "PATCH",
+      headers: authHeaders(token, { "Content-Type": "application/json" }),
+      body: JSON.stringify({ botEnabled }),
+    },
+  );
+  return response.conversation;
+}
+
 export async function updateConversationSettings(
   token: string,
   conversationId: string,

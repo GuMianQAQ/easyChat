@@ -30,6 +30,7 @@ import {
   leaveGroupConversation,
   markConversationRead,
   updateConversationSettings,
+  updateGroupBotEnabled,
   updateGroupConversation,
   uploadImage,
 } from "../utils/chatApi";
@@ -223,6 +224,11 @@ export function createConversationActions({
   };
 
   const handleOpenContactChat = async (contact: ContactItem) => {
+    if (contact.source === "group") {
+      openConversation(contact.id);
+      return;
+    }
+
     if (contact.source !== "manual") {
       return;
     }
@@ -309,6 +315,31 @@ export function createConversationActions({
         eventType: `group-conversation-update-${conversationId}`,
         title: "缇よ亰",
         content: error instanceof Error ? error.message : "淇敼缇よ亰澶辫触",
+        level: "error",
+      });
+      return null;
+    }
+  };
+
+  const handleUpdateGroupBotEnabled = async (
+    conversationId: string,
+    botEnabled: boolean,
+  ): Promise<GroupConversationPayload | null> => {
+    if (!storedToken) {
+      handleAuthExpired();
+      return null;
+    }
+
+    try {
+      return await updateGroupBotEnabled(storedToken, conversationId, botEnabled);
+    } catch (error) {
+      if (handleAuthError(error)) {
+        return null;
+      }
+      addSystemNotice({
+        eventType: `group-bot-toggle-${conversationId}`,
+        title: "群机器人",
+        content: error instanceof Error ? error.message : "群机器人设置失败",
         level: "error",
       });
       return null;
@@ -674,6 +705,7 @@ export function createConversationActions({
     handleOpenContactChat,
     handleCreateGroupConversation,
     handleUpdateGroupConversation,
+    handleUpdateGroupBotEnabled,
     handleSendText,
     handleSendImage,
     handleCaptureScreen,

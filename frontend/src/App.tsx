@@ -70,6 +70,8 @@ import "./styles/chat.css";
 const APP_NAME = "MyChat";
 
 function App() {
+  const isMomentsStandalone =
+    window.location.search.includes("window=moments") || Boolean(window.myChatMoments?.isMomentsWindow);
   const [storedAuthDraft, setStoredAuthDraft, removeStoredAuthDraft] = useLocalStorage<AuthDraft>(
     "easychat:auth-draft",
     DEFAULT_AUTH_DRAFT,
@@ -180,6 +182,13 @@ function App() {
     let cancelled = false;
 
     const bootstrap = async () => {
+      if (isMomentsStandalone) {
+        if (!cancelled) {
+          setAuthReady(true);
+        }
+        return;
+      }
+
       if (currentUser) {
         if (!cancelled) {
           setAuthReady(true);
@@ -228,7 +237,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser, join, resetSession, setStoredContacts, storedToken]);
+  }, [currentUser, isMomentsStandalone, join, resetSession, setStoredContacts, storedToken]);
 
   useEffect(() => {
     if (authReady && !currentUser && authDraft.mode === "register" && !authDraft.register.captchaId) {
@@ -293,12 +302,13 @@ function App() {
     const isPrivate = latestMessage.messageScope === "private";
     const conversationId = latestMessage.conversationId;
     const isGroup = latestMessage.messageScope === "group";
+    const knownConversation = conversations.find((conversation) => conversation.id === conversationId);
     const title = isPrivate
       ? latestMessage.isSelf
         ? latestMessage.targetName || latestMessage.targetUserId || "私聊"
         : latestMessage.senderName
       : isGroup
-        ? conversations.find((conversation) => conversation.id === conversationId)?.title || "群聊"
+        ? knownConversation?.title || "群聊"
         : "系统通知";
 
     const isCurrentConversationOpen =
@@ -327,6 +337,10 @@ function App() {
 
     if (latestMessage.type === "chat" && !latestMessage.isSelf && isOpen && storedToken) {
       void handleMarkConversationRead(conversationId);
+    }
+
+    if (isGroup && !knownConversation && storedToken) {
+      void refreshConversations(storedToken);
     }
 
     setConversations((previous) =>
@@ -572,6 +586,19 @@ function App() {
     return updated;
   };
 
+  const handleUpdateGroupBotEnabled = async (conversationId: string, botEnabled: boolean) => {
+    const updated = await updateGroupBotEnabledRemote(conversationId, botEnabled);
+    if (!updated) {
+      return null;
+    }
+
+    setGroupConversation(updated);
+    setConversations((previous) =>
+      applyGroupConversationSummary(previous, conversationId, updated),
+    );
+    return updated;
+  };
+
   const activeMessages = useMemo(
     () => messages.filter((message) => message.conversationId === activeConversationId),
     [activeConversationId, messages],
@@ -742,6 +769,7 @@ function App() {
     handleCaptureScreen,
     handleUpdateConversationSettings,
     handleUpdateGroupConversation: updateGroupConversationRemote,
+    handleUpdateGroupBotEnabled: updateGroupBotEnabledRemote,
     handleClearConversation,
     handleDeleteConversation,
     toggleFavorite,
@@ -791,6 +819,42 @@ function App() {
   });
 
   useEffect(() => {
+    if (isMomentsStandalone || !window.myChatWindow?.onProfileAction) {
+      return;
+    }
+
+    return window.myChatWindow.onProfileAction(({ action, profile }) => {
+      if (action === "settings") {
+        setActiveDock("settings");
+        setProfileCard(null);
+        return;
+      }
+
+      if (action === "send-request") {
+        setFriendPanelOpen(true);
+        setFriendSearchResult(profile);
+        setProfileCard(null);
+        return;
+      }
+
+      if (action === "chat") {
+        void handleOpenContactChat({
+          id: profile.id,
+          name: profile.nickname,
+          avatar: profile.avatar,
+          username: profile.username,
+          gender: profile.gender,
+          region: profile.region,
+          signature: profile.signature,
+          source: profile.isFriend ? "manual" : "recent",
+          permission: "chat",
+        });
+        setProfileCard(null);
+      }
+    });
+  }, [handleOpenContactChat, isMomentsStandalone]);
+
+  useEffect(() => {
     if (activeDock !== "chat" || !activeConversationId || !storedToken) {
       return;
     }
@@ -807,7 +871,7 @@ function App() {
   }, [activeConversationId, activeDock, conversations, storedToken]);
 
   // Standalone Moments window — render self-contained page
-  if (window.myChatMoments?.isMomentsWindow) {
+  if (isMomentsStandalone) {
     return <MomentsWindow />;
   }
 
@@ -944,6 +1008,7 @@ function App() {
           onDismissGroupConversation: (conversation) =>
             handleDismissGroupConversation(conversation),
           onUpdateGroupConversation: handleUpdateGroupConversation,
+          onUpdateGroupBotEnabled: handleUpdateGroupBotEnabled,
         }}
         contactItems={contactItems}
         starredContacts={starredContacts}
@@ -987,7 +1052,7 @@ function App() {
         onCloseContactsManagement={() => setContactsManagementOpen(false)}
         onOpenChatFromContact={handleOpenContactChat}
         onOpenContactMoments={(contact) => {
-          window.myChatMoments?.open({ userId: contact.id });
+          window.myChatMoments?.open({ userId: contact.friendId || contact.id });
         }}
         onUpdateContact={handleUpdateContact}
         onSetContactPermission={handleSetContactPermission}
@@ -1055,6 +1120,10 @@ function App() {
         onOpenSendRequestFromProfile={(profile) => {
           setFriendPanelOpen(true);
           setFriendSearchResult(profile);
+          setProfileCard(null);
+        }}
+        onOpenMomentsFromProfile={(profile) => {
+          window.myChatMoments?.open({ userId: profile.id });
           setProfileCard(null);
         }}
 

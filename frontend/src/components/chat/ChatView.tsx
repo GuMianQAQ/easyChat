@@ -66,6 +66,7 @@ interface ChatMainProps {
       isMuted?: boolean;
     },
   ) => Promise<GroupConversationPayload | null>;
+  onUpdateGroupBotEnabled: (conversationId: string, botEnabled: boolean) => Promise<GroupConversationPayload | null>;
 }
 
 function NotificationPanel({ notifications }: { notifications: NotificationItem[] }) {
@@ -129,12 +130,41 @@ function ChatMain({
   onDismissGroupConversation,
   onUploadImage,
   onUpdateGroupConversation,
+  onUpdateGroupBotEnabled,
 }: ChatMainProps) {
   const [previewImage, setPreviewImage] = useState("");
   const [quote, setQuote] = useState<MessageQuote | null>(null);
   const [dragging, setDragging] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [jumpToMessageId, setJumpToMessageId] = useState("");
+  const [translation, setTranslation] = useState<{ text: string; result: string } | null>(null);
+  const composerPlaceholder =
+    activeConversation.type === "private" && activeConversation.targetUserId === "ai-assistant"
+      ? "直接向 AI 助手提问"
+      : "输入消息";
+
+  const handleTranslate = async (message: ChatMessage) => {
+    setTranslation({ text: message.content, result: "翻译中..." });
+    try {
+      const token = localStorage.getItem("easychat:token") || "";
+      const resp = await fetch("/api/ai/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text: message.content, targetLang: "中文" }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setTranslation({ text: message.content, result: data.translation });
+      } else {
+        setTranslation({ text: message.content, result: data.error || "翻译失败" });
+      }
+    } catch {
+      setTranslation({ text: message.content, result: "翻译请求失败" });
+    }
+  };
 
   useEffect(() => {
     setQuote(null);
@@ -256,12 +286,24 @@ function ChatMain({
           onDeleteLocal={onDeleteLocal}
           onRevoke={onRevoke}
           onRetry={onRetry}
+          onTranslate={handleTranslate}
         />
+        {translation && (
+          <div className="translation-result">
+            <div className="translation-header">
+              <span>翻译结果</span>
+              <button type="button" onClick={() => setTranslation(null)}>×</button>
+            </div>
+            <div className="translation-original">{translation.text}</div>
+            <div className="translation-output">{translation.result}</div>
+          </div>
+        )}
         <MessageComposer
           activeConversationId={activeConversation.id}
           content={draftContent}
           disabled={status !== "connected" || Boolean(composerDisabledReason)}
           disabledReason={composerDisabledReason}
+          placeholderText={composerPlaceholder}
           enterToSend={enterToSend}
           clearAfterSend={clearAfterSend}
           quote={quote}
@@ -290,6 +332,7 @@ function ChatMain({
           onDismissGroup={() => onDismissGroupConversation(activeConversation)}
           onUploadImage={onUploadImage}
           onUpdateGroupConversation={onUpdateGroupConversation}
+          onUpdateGroupBotEnabled={onUpdateGroupBotEnabled}
         />
       </div>
 

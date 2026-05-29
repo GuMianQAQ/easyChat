@@ -1,16 +1,17 @@
 package moments
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"easyChat/internal/auth"
 	"easyChat/internal/social"
 
-	"crypto/rand"
 	"gorm.io/gorm"
 )
 
@@ -23,15 +24,13 @@ func NewService(db *gorm.DB, social *social.Service) *Service {
 	return &Service{db: db, social: social}
 }
 
-// ---------- post CRUD ----------
-
 func (s *Service) CreatePost(userID string, input CreateMomentInput) (MomentItem, error) {
 	userID = strings.TrimSpace(userID)
 	content := strings.TrimSpace(input.Content)
 	if content == "" {
 		return MomentItem{}, errors.New("内容不能为空")
 	}
-	if len([]rune(content)) > 5000 {
+	if utf8.RuneCountInString(content) > 5000 {
 		return MomentItem{}, errors.New("内容太长")
 	}
 
@@ -54,7 +53,14 @@ func (s *Service) CreatePost(userID string, input CreateMomentInput) (MomentItem
 		return MomentItem{}, err
 	}
 
-	return s.buildMomentItem(post, userID)
+	items, err := s.buildMomentItems([]Moment{post}, userID)
+	if err != nil {
+		return MomentItem{}, err
+	}
+	if len(items) == 0 {
+		return MomentItem{}, errors.New("动态创建失败")
+	}
+	return items[0], nil
 }
 
 func (s *Service) GetFeed(userID string) ([]MomentItem, error) {
@@ -63,7 +69,6 @@ func (s *Service) GetFeed(userID string) ([]MomentItem, error) {
 		return nil, errors.New("缺少用户信息")
 	}
 
-	// 获取可见好友列表
 	friends, err := s.social.ListFriends(userID)
 	if err != nil {
 		return nil, err
@@ -71,32 +76,20 @@ func (s *Service) GetFeed(userID string) ([]MomentItem, error) {
 
 	visibleIDs := make([]string, 0, len(friends)+1)
 	visibleIDs = append(visibleIDs, userID)
-	for _, f := range friends {
-		if !f.IsBlocked && !f.BlockedByPeer {
-			visibleIDs = append(visibleIDs, f.FriendID)
+	for _, friend := range friends {
+		if !friend.IsBlocked && !friend.BlockedByPeer {
+			visibleIDs = append(visibleIDs, friend.FriendID)
 		}
 	}
-
 	if len(visibleIDs) == 0 {
 		return []MomentItem{}, nil
 	}
 
 	var posts []Moment
-	if err := s.db.Where("author_id IN ?", visibleIDs).
-		Order("created_at desc").
-		Find(&posts).Error; err != nil {
+	if err := s.db.Where("author_id IN ?", visibleIDs).Order("created_at desc").Find(&posts).Error; err != nil {
 		return nil, err
 	}
-
-	items := make([]MomentItem, 0, len(posts))
-	for _, post := range posts {
-		item, err := s.buildMomentItem(post, userID)
-		if err != nil {
-			continue // skip items that fail to build (e.g. deleted author)
-		}
-		items = append(items, item)
-	}
-	return items, nil
+	return s.buildMomentItems(posts, userID)
 }
 
 func (s *Service) GetProfileFeed(viewerID, targetID string) ([]MomentItem, error) {
@@ -118,21 +111,10 @@ func (s *Service) GetProfileFeed(viewerID, targetID string) ([]MomentItem, error
 	}
 
 	var posts []Moment
-	if err := s.db.Where("author_id = ?", targetID).
-		Order("created_at desc").
-		Find(&posts).Error; err != nil {
+	if err := s.db.Where("author_id = ?", targetID).Order("created_at desc").Find(&posts).Error; err != nil {
 		return nil, err
 	}
-
-	items := make([]MomentItem, 0, len(posts))
-	for _, post := range posts {
-		item, err := s.buildMomentItem(post, viewerID)
-		if err != nil {
-			continue
-		}
-		items = append(items, item)
-	}
-	return items, nil
+	return s.buildMomentItems(posts, viewerID)
 }
 
 func (s *Service) DeletePost(userID, momentID string) error {
@@ -164,8 +146,6 @@ func (s *Service) DeletePost(userID, momentID string) error {
 	})
 }
 
-// ---------- likes ----------
-
 func (s *Service) LikePost(userID, momentID string) error {
 	userID = strings.TrimSpace(userID)
 	momentID = strings.TrimSpace(momentID)
@@ -185,11 +165,8 @@ func (s *Service) LikePost(userID, momentID string) error {
 func (s *Service) UnlikePost(userID, momentID string) error {
 	userID = strings.TrimSpace(userID)
 	momentID = strings.TrimSpace(momentID)
-	return s.db.Where("moment_id = ? AND user_id = ?", momentID, userID).
-		Delete(&MomentLike{}).Error
+	return s.db.Where("moment_id = ? AND user_id = ?", momentID, userID).Delete(&MomentLike{}).Error
 }
-
-// ---------- comments ----------
 
 func (s *Service) AddComment(userID, momentID string, input AddCommentInput) (CommentItem, error) {
 	userID = strings.TrimSpace(userID)
@@ -198,7 +175,7 @@ func (s *Service) AddComment(userID, momentID string, input AddCommentInput) (Co
 	if content == "" {
 		return CommentItem{}, errors.New("评论内容不能为空")
 	}
-	if len([]rune(content)) > 1000 {
+	if utf8.RuneCountInString(content) > 1000 {
 		return CommentItem{}, errors.New("评论太长")
 	}
 
@@ -216,7 +193,11 @@ func (s *Service) AddComment(userID, momentID string, input AddCommentInput) (Co
 		return CommentItem{}, err
 	}
 
-	return s.buildCommentItem(comment, userID)
+	authors, err := s.lookupAuthors([]string{comment.AuthorID})
+	if err != nil {
+		return CommentItem{}, err
+	}
+	return buildCommentItem(comment, userID, authors[comment.AuthorID])
 }
 
 func (s *Service) DeleteComment(userID, commentID string) error {
@@ -231,7 +212,6 @@ func (s *Service) DeleteComment(userID, commentID string) error {
 		return err
 	}
 
-	// 只有评论作者或动态作者可以删除评论
 	var post Moment
 	if err := s.db.Where("id = ?", comment.MomentID).First(&post).Error; err != nil {
 		return err
@@ -243,9 +223,6 @@ func (s *Service) DeleteComment(userID, commentID string) error {
 	return s.db.Delete(&comment).Error
 }
 
-// ---------- visibility ----------
-
-// ensurePostVisible checks that the user can see the given post.
 func (s *Service) ensurePostVisible(userID, momentID string) error {
 	var post Moment
 	if err := s.db.Where("id = ?", momentID).First(&post).Error; err != nil {
@@ -255,7 +232,7 @@ func (s *Service) ensurePostVisible(userID, momentID string) error {
 		return err
 	}
 	if post.AuthorID == userID {
-		return nil // own post always visible
+		return nil
 	}
 
 	ok, err := s.isVisibleFriend(userID, post.AuthorID)
@@ -268,7 +245,6 @@ func (s *Service) ensurePostVisible(userID, momentID string) error {
 	return nil
 }
 
-// isVisibleFriend checks friendship + block status.
 func (s *Service) isVisibleFriend(viewerID, authorID string) (bool, error) {
 	isFriend, err := s.social.IsFriend(viewerID, authorID)
 	if err != nil {
@@ -278,21 +254,19 @@ func (s *Service) isVisibleFriend(viewerID, authorID string) (bool, error) {
 		return false, nil
 	}
 
-	// Check viewer blocked author
-	ok, err := s.isBlockedBy(viewerID, authorID)
+	blocked, err := s.isBlockedBy(viewerID, authorID)
 	if err != nil {
 		return false, err
 	}
-	if ok {
+	if blocked {
 		return false, nil
 	}
 
-	// Check author blocked viewer
-	ok, err = s.isBlockedBy(authorID, viewerID)
+	blocked, err = s.isBlockedBy(authorID, viewerID)
 	if err != nil {
 		return false, nil
 	}
-	if ok {
+	if blocked {
 		return false, nil
 	}
 
@@ -311,63 +285,121 @@ func (s *Service) isBlockedBy(userID, targetID string) (bool, error) {
 	return friendship.IsBlocked, nil
 }
 
-// ---------- item builders ----------
+func (s *Service) buildMomentItems(posts []Moment, viewerID string) ([]MomentItem, error) {
+	if len(posts) == 0 {
+		return []MomentItem{}, nil
+	}
 
-func (s *Service) buildMomentItem(post Moment, viewerID string) (MomentItem, error) {
-	author, err := s.lookupAuthor(post.AuthorID)
+	postIDs := make([]string, 0, len(posts))
+	authorIDs := make([]string, 0, len(posts))
+	for _, post := range posts {
+		postIDs = append(postIDs, post.ID)
+		authorIDs = append(authorIDs, post.AuthorID)
+	}
+
+	var comments []MomentComment
+	if err := s.db.Where("moment_id IN ?", postIDs).Order("created_at asc").Find(&comments).Error; err != nil {
+		return nil, err
+	}
+
+	commentAuthors := make([]string, 0, len(comments))
+	for _, comment := range comments {
+		commentAuthors = append(commentAuthors, comment.AuthorID)
+	}
+
+	authors, err := s.lookupAuthors(append(authorIDs, commentAuthors...))
 	if err != nil {
-		return MomentItem{}, err
-	}
-
-	var images []string
-	if post.Images != "" {
-		json.Unmarshal([]byte(post.Images), &images)
-	}
-	if images == nil {
-		images = []string{}
+		return nil, err
 	}
 
 	var likes []MomentLike
-	s.db.Where("moment_id = ?", post.ID).Find(&likes)
+	if err := s.db.Where("moment_id IN ?", postIDs).Find(&likes).Error; err != nil {
+		return nil, err
+	}
 
-	var comments []MomentComment
-	s.db.Where("moment_id = ?", post.ID).Order("created_at asc").Find(&comments)
-
-	likedByMe := false
-	for _, l := range likes {
-		if l.UserID == viewerID {
-			likedByMe = true
-			break
+	likeCounts := make(map[string]int, len(posts))
+	likedByViewer := make(map[string]bool, len(posts))
+	for _, like := range likes {
+		likeCounts[like.MomentID]++
+		if like.UserID == viewerID {
+			likedByViewer[like.MomentID] = true
 		}
 	}
 
-	commentItems := make([]CommentItem, 0, len(comments))
-	for _, c := range comments {
-		ci, err := s.buildCommentItem(c, viewerID)
+	commentItemsByMoment := make(map[string][]CommentItem, len(posts))
+	for _, comment := range comments {
+		author, ok := authors[comment.AuthorID]
+		if !ok {
+			continue
+		}
+		item, err := buildCommentItem(comment, viewerID, author)
 		if err != nil {
 			continue
 		}
-		commentItems = append(commentItems, ci)
+		commentItemsByMoment[comment.MomentID] = append(commentItemsByMoment[comment.MomentID], item)
 	}
 
-	return MomentItem{
-		ID:        post.ID,
-		AuthorID:  post.AuthorID,
-		Author:    author,
-		Content:   post.Content,
-		Images:    images,
-		LikeCount: len(likes),
-		LikedByMe: likedByMe,
-		Comments:  commentItems,
-		CanDelete: post.AuthorID == viewerID,
-		CreatedAt: post.CreatedAt.Format("2006-01-02 15:04:05"),
-	}, nil
+	items := make([]MomentItem, 0, len(posts))
+	for _, post := range posts {
+		author, ok := authors[post.AuthorID]
+		if !ok {
+			continue
+		}
+		images, err := decodeImages(post.Images)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, MomentItem{
+			ID:        post.ID,
+			AuthorID:  post.AuthorID,
+			Author:    author,
+			Content:   post.Content,
+			Images:    images,
+			LikeCount: likeCounts[post.ID],
+			LikedByMe: likedByViewer[post.ID],
+			Comments:  commentItemsByMoment[post.ID],
+			CanDelete: post.AuthorID == viewerID,
+			CreatedAt: post.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	return items, nil
 }
 
-func (s *Service) buildCommentItem(comment MomentComment, viewerID string) (CommentItem, error) {
-	author, err := s.lookupAuthor(comment.AuthorID)
-	if err != nil {
-		return CommentItem{}, err
+func (s *Service) lookupAuthors(userIDs []string) (map[string]AuthorInfo, error) {
+	uniqueIDs := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		if _, ok := seen[userID]; ok || userID == "" {
+			continue
+		}
+		seen[userID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, userID)
+	}
+	if len(uniqueIDs) == 0 {
+		return map[string]AuthorInfo{}, nil
+	}
+
+	var users []auth.User
+	if err := s.db.Where("id IN ?", uniqueIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	authors := make(map[string]AuthorInfo, len(users))
+	for _, user := range users {
+		authors[user.ID] = AuthorInfo{
+			ID:       user.ID,
+			Username: user.Username,
+			Nickname: user.Nickname,
+			Avatar:   user.Avatar,
+		}
+	}
+	return authors, nil
+}
+
+func buildCommentItem(comment MomentComment, viewerID string, author AuthorInfo) (CommentItem, error) {
+	if author.ID == "" {
+		return CommentItem{}, errors.New("评论作者不存在")
 	}
 	return CommentItem{
 		ID:        comment.ID,
@@ -379,17 +411,19 @@ func (s *Service) buildCommentItem(comment MomentComment, viewerID string) (Comm
 	}, nil
 }
 
-func (s *Service) lookupAuthor(userID string) (AuthorInfo, error) {
-	var user auth.User
-	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return AuthorInfo{}, err
+func decodeImages(raw string) ([]string, error) {
+	if raw == "" {
+		return []string{}, nil
 	}
-	return AuthorInfo{
-		ID:       user.ID,
-		Username: user.Username,
-		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
-	}, nil
+
+	var images []string
+	if err := json.Unmarshal([]byte(raw), &images); err != nil {
+		return nil, err
+	}
+	if images == nil {
+		return []string{}, nil
+	}
+	return images, nil
 }
 
 func newID(prefix string) string {

@@ -37,6 +37,7 @@ temp/
 # Go cache / workspace
 .gocache/
 .gomodcache/
+.gotmp/
 go.work
 go.work.sum
 
@@ -68,6 +69,7 @@ frontend/build/
 release/
 out/
 dist-electron/
+.electron-cache/
 frontend/release/
 frontend/out/
 frontend/dist-electron/
@@ -88,6 +90,7 @@ builder-effective-config.yaml
 # Test / coverage
 coverage/
 frontend/coverage/
+frontend/.test-dist/
 
 # Local runtime files
 *.pid

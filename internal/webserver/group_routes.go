@@ -1,10 +1,12 @@
 package webserver
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
 	"easyChat/internal/chatstore"
+	"easyChat/internal/webchat"
 
 	"github.com/gin-gonic/gin"
 )
@@ -59,6 +61,33 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if targets, err := s.Store.ConversationMemberIDs(user.ID, conversation.ID); err != nil {
+			log.Printf("warning: failed to notify group members for %s: %v", conversation.ID, err)
+		} else {
+			onlineTargets := make([]string, 0, len(targets))
+			for _, targetID := range targets {
+				if targetID == user.ID {
+					continue
+				}
+				onlineTargets = append(onlineTargets, targetID)
+			}
+			if s.Hub != nil && len(onlineTargets) > 0 {
+				s.Hub.BroadcastPrivate(
+					webchat.Message{
+						ID:             webchat.NewMessageID(),
+						ConversationID: conversation.ID,
+						MessageScope:   webchat.ScopeGroup,
+						Type:           webchat.MessageTypeSystem,
+						MessageType:    webchat.ChatMessageText,
+						SenderID:       user.ID,
+						SenderName:     conversation.Name,
+						Content:        "你已加入群聊",
+						CreatedAt:      webchat.NowString(),
+					},
+					onlineTargets...,
+				)
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{"conversation": conversation})
 	})
 
@@ -98,6 +127,33 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 				status = http.StatusForbidden
 			}
 			if strings.Contains(err.Error(), errGroupOwnerOnly) {
+				status = http.StatusForbidden
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"conversation": conversation})
+	})
+
+	api.PATCH("/groups/:id/bot", func(c *gin.Context) {
+		user, err := s.Auth.UserFromToken(bearerToken(c))
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		var req struct {
+			BotEnabled bool `json:"botEnabled"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
+			return
+		}
+		conversation, err := s.Store.SetGroupBotEnabled(user.ID, c.Param("id"), req.BotEnabled)
+		if err != nil {
+			status := http.StatusBadRequest
+			if strings.Contains(err.Error(), errConversationAccessDenied) ||
+				strings.Contains(err.Error(), errGroupAccessDenied) ||
+				strings.Contains(err.Error(), errGroupOwnerOnly) {
 				status = http.StatusForbidden
 			}
 			c.JSON(status, gin.H{"error": err.Error()})

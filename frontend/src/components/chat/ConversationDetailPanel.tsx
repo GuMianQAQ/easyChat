@@ -27,6 +27,7 @@ interface ConversationDetailPanelProps {
       isMuted?: boolean;
     },
   ) => Promise<GroupConversationPayload | null>;
+  onUpdateGroupBotEnabled: (conversationId: string, botEnabled: boolean) => Promise<GroupConversationPayload | null>;
 }
 
 interface EditableGroupFieldProps {
@@ -217,6 +218,7 @@ function ConversationDetailPanel({
   onDismissGroup,
   onUploadImage,
   onUpdateGroupConversation,
+  onUpdateGroupBotEnabled,
 }: ConversationDetailPanelProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -260,6 +262,7 @@ function ConversationDetailPanel({
   const isGroupOwner = groupConversation?.myRole === "owner";
   const groupTitle = groupConversation?.name || conversation.title;
   const groupAnnouncement = groupConversation?.announcement || conversation.announcement || "";
+  const groupBotEnabled = Boolean(groupConversation?.botEnabled);
 
   const saveGroupPatch = async (
     patch: {
@@ -419,6 +422,21 @@ function ConversationDetailPanel({
                   editable
                   onSave={(value) => saveGroupPatch({ myNickname: value })}
                 />
+                <div className="conversation-profile-item conversation-profile-item-switch">
+                  <div className="conversation-profile-item-body">
+                    <div className="conversation-detail-row-main">
+                      <strong>群机器人</strong>
+                    </div>
+                    <Switch
+                      checked={groupBotEnabled}
+                      disabled={!isGroupOwner}
+                      onChange={async (next) => {
+                        await onUpdateGroupBotEnabled(conversation.id, next);
+                      }}
+                      label="群机器人"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </>
@@ -470,6 +488,22 @@ function ConversationDetailPanel({
                 <div className="conversation-search-empty">没有找到相关聊天记录</div>
               )
             ) : null}
+          </div>
+        ) : null}
+
+        {isGroup ? (
+          <div className="conversation-detail-row">
+            <div className="conversation-detail-row-main">
+              <strong>群机器人</strong>
+            </div>
+            <Switch
+              checked={groupBotEnabled}
+              disabled={!isGroupOwner}
+              onChange={async (next) => {
+                await onUpdateGroupBotEnabled(conversation.id, next);
+              }}
+              label="群机器人"
+            />
           </div>
         ) : null}
 

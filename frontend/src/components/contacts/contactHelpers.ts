@@ -5,11 +5,11 @@ export function sourceLabel(contact: ContactItem): string {
     case "self":
       return "当前用户";
     case "group":
-      return "群聊";
+      return "通过群聊添加";
     case "system":
       return "系统联系人";
     case "recent":
-      return "最近联系人";
+      return "通过名片分享添加";
     default:
       return "通过账号搜索添加";
   }
@@ -18,7 +18,7 @@ export function sourceLabel(contact: ContactItem): string {
 export function permissionLabel(permission: ContactPermission | undefined): string {
   switch (permission) {
     case "limited":
-      return "不可见";
+      return "不可查看";
     default:
       return "可聊天";
   }

@@ -8,9 +8,13 @@ contextBridge.exposeInMainWorld("chatRoomConfig", {
 contextBridge.exposeInMainWorld("myChatDesktop", true);
 
 contextBridge.exposeInMainWorld("myChatWindow", {
-  minimize: () => ipcRenderer.invoke("mychat-window:minimize"),
+  minimize: () => {
+    return ipcRenderer.invoke("mychat-window:minimize");
+  },
   toggleMaximize: () => ipcRenderer.invoke("mychat-window:toggle-maximize"),
-  close: () => ipcRenderer.invoke("mychat-window:close"),
+  close: () => {
+    return ipcRenderer.invoke("mychat-window:close");
+  },
   toggleAlwaysOnTop: () => ipcRenderer.invoke("mychat-window:toggle-always-on-top"),
   startAttention: (conversationId?: string) =>
     ipcRenderer.invoke("mychat-window:start-attention", conversationId),
@@ -63,7 +67,73 @@ contextBridge.exposeInMainWorld("myChatWindow", {
     ipcRenderer.on("mychat:attention-open-conversation", wrapped);
     return () => ipcRenderer.removeListener("mychat:attention-open-conversation", wrapped);
   },
+  requestProfileAction: (payload: {
+    action: "chat" | "send-request" | "settings";
+    profile: {
+      id: string;
+      username: string;
+      nickname: string;
+      avatar: string;
+      gender?: "unknown" | "male" | "female";
+      region?: string;
+      signature?: string;
+      momentCover?: string;
+      isSelf: boolean;
+      isFriend: boolean;
+      requestStatus: string;
+      requestId?: string;
+      allowFriendRequest: boolean;
+    };
+  }) => ipcRenderer.invoke("mychat-window:request-profile-action", payload),
+  onProfileAction: (
+    listener: (payload: {
+      action: "chat" | "send-request" | "settings";
+      profile: {
+        id: string;
+        username: string;
+        nickname: string;
+        avatar: string;
+        gender?: "unknown" | "male" | "female";
+        region?: string;
+        signature?: string;
+        momentCover?: string;
+        isSelf: boolean;
+        isFriend: boolean;
+        requestStatus: string;
+        requestId?: string;
+        allowFriendRequest: boolean;
+      };
+    }) => void,
+  ) => {
+    const wrapped = (
+      _event: unknown,
+      payload: {
+        action: "chat" | "send-request" | "settings";
+        profile: {
+          id: string;
+          username: string;
+          nickname: string;
+          avatar: string;
+          gender?: "unknown" | "male" | "female";
+          region?: string;
+          signature?: string;
+          momentCover?: string;
+          isSelf: boolean;
+          isFriend: boolean;
+          requestStatus: string;
+          requestId?: string;
+          allowFriendRequest: boolean;
+        };
+      },
+    ) => {
+      listener(payload);
+    };
+    ipcRenderer.on("mychat:profile-action", wrapped);
+    return () => ipcRenderer.removeListener("mychat:profile-action", wrapped);
+  },
 });
+
+const isMomentsWindow = location.search.includes("window=moments");
 
 contextBridge.exposeInMainWorld("myChatMoments", {
   open: (context?: { userId?: string }) => ipcRenderer.invoke("mychat-moments:open", context),
@@ -75,7 +145,7 @@ contextBridge.exposeInMainWorld("myChatMoments", {
     ipcRenderer.on("mychat:moments-context", wrapped);
     return () => ipcRenderer.removeListener("mychat:moments-context", wrapped);
   },
-  isMomentsWindow: location.search.includes("window=moments"),
+  isMomentsWindow,
 });
 
 contextBridge.exposeInMainWorld("myChatAttentionPreview", {

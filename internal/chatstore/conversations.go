@@ -37,6 +37,11 @@ func (s *Service) cleanupLegacyPublicConversation() error {
 	})
 }
 
+func (s *Service) cleanupAIFromPrivateConversations() error {
+	return s.db.Where("user_id = ? AND conversation_id LIKE ?", "ai-assistant", "private:%").
+		Delete(&ConversationMember{}).Error
+}
+
 func (s *Service) ListConversations(userID string) ([]ConversationSummary, error) {
 	memberMap, err := s.memberMap(userID)
 	if err != nil {
@@ -448,8 +453,12 @@ func (s *Service) privatePartner(conversationID, currentUserID string) (auth.Use
 	if err := s.db.Where("conversation_id = ?", conversationID).Find(&members).Error; err != nil {
 		return auth.User{}, err
 	}
+	hasAIPartner := len(members) > 2
 	for _, member := range members {
 		if member.UserID == currentUserID {
+			continue
+		}
+		if hasAIPartner && member.UserID == "ai-assistant" {
 			continue
 		}
 		return s.lookupUser(member.UserID)
@@ -514,4 +523,34 @@ func (s *Service) ensureSettingsMember(userID, conversationID string) (*Conversa
 		return nil, err
 	}
 	return s.memberRecord(userID, conversationID)
+}
+
+func (s *Service) EnsureMember(conversationID, userID string) error {
+	conversationID = strings.TrimSpace(conversationID)
+	userID = strings.TrimSpace(userID)
+	if conversationID == "" || userID == "" {
+		return errors.New("缺少会话 ID 或用户 ID")
+	}
+
+	var count int64
+	if err := s.db.Model(&ConversationMember{}).
+		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	record := ConversationMember{
+		ID:             newID("member"),
+		ConversationID: conversationID,
+		UserID:         userID,
+		Role:           "member",
+		JoinedAt:       time.Now(),
+	}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "conversation_id"}, {Name: "user_id"}},
+		DoNothing: true,
+	}).Create(&record).Error
 }

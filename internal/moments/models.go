@@ -1,10 +1,8 @@
 package moments
 
-import (
-	"time"
-)
+import "time"
 
-// Moment 朋友圈动态
+// Moment 表示一条朋友圈动态。
 type Moment struct {
 	ID        string `gorm:"primaryKey"`
 	AuthorID  string `gorm:"index;size:64;not null"`
@@ -14,7 +12,7 @@ type Moment struct {
 	UpdatedAt time.Time
 }
 
-// MomentLike 点赞记录
+// MomentLike 表示一条点赞记录。
 type MomentLike struct {
 	ID        string `gorm:"primaryKey"`
 	MomentID  string `gorm:"uniqueIndex:idx_moment_like;size:64;not null"`
@@ -22,7 +20,7 @@ type MomentLike struct {
 	CreatedAt time.Time
 }
 
-// MomentComment 评论
+// MomentComment 表示一条评论。
 type MomentComment struct {
 	ID        string `gorm:"primaryKey"`
 	MomentID  string `gorm:"index;size:64;not null"`
@@ -30,8 +28,6 @@ type MomentComment struct {
 	Content   string `gorm:"type:text;not null"`
 	CreatedAt time.Time
 }
-
-// ---------- API payloads ----------
 
 type MomentItem struct {
 	ID        string        `json:"id"`
