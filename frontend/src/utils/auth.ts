@@ -2,6 +2,23 @@ import type { CurrentUser } from "../types/chat";
 import { createApiError } from "./apiError";
 import { resolveApiUrl } from "../config/env";
 
+export function getToken(): string {
+  try {
+    const stored = localStorage.getItem("easychat:token");
+    if (!stored) {
+      return "";
+    }
+    try {
+      const parsed = JSON.parse(stored);
+      return typeof parsed === "string" ? parsed : "";
+    } catch {
+      return stored;
+    }
+  } catch {
+    return "";
+  }
+}
+
 interface CaptchaResponse {
   captchaId: string;
   image: string;

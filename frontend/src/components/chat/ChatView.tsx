@@ -9,6 +9,8 @@ import type {
   MessageQuote,
   NotificationItem,
 } from "../../types/chat";
+import { resolveApiUrl } from "../../config/env";
+import { getToken } from "../../utils/auth";
 import { prepareImageDataUrl } from "../../utils/media";
 import EmptyState from "../common/EmptyState";
 import ChatHeader from "./ChatHeader";
@@ -32,6 +34,9 @@ interface ChatMainProps {
   clearAfterSend: boolean;
   composerDisabledReason?: string;
   draftContent: string;
+  streamingContent?: string;
+  streamingLoading?: boolean;
+  aiReplySuggestions?: boolean;
   onDraftChange: (value: string) => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
@@ -109,6 +114,9 @@ function ChatMain({
   clearAfterSend,
   composerDisabledReason = "",
   draftContent,
+  streamingContent,
+  streamingLoading,
+  aiReplySuggestions,
   onDraftChange,
   onSendText,
   onSendImage,
@@ -138,16 +146,14 @@ function ChatMain({
   const [menuOpen, setMenuOpen] = useState(false);
   const [jumpToMessageId, setJumpToMessageId] = useState("");
   const [translation, setTranslation] = useState<{ text: string; result: string } | null>(null);
-  const composerPlaceholder =
-    activeConversation.type === "private" && activeConversation.targetUserId === "ai-assistant"
-      ? "直接向 AI 助手提问"
-      : "输入消息";
+  const isAIAssistant = activeConversation.type === "private" && activeConversation.targetUserId === "ai-assistant";
+  const composerPlaceholder = isAIAssistant ? "直接向 AI 助手提问" : "输入消息";
 
   const handleTranslate = async (message: ChatMessage) => {
     setTranslation({ text: message.content, result: "翻译中..." });
     try {
-      const token = localStorage.getItem("easychat:token") || "";
-      const resp = await fetch("/api/ai/translate", {
+      const token = getToken();
+      const resp = await fetch(resolveApiUrl("/api/ai/translate"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -251,7 +257,7 @@ function ChatMain({
         }
       }}
     >
-      <div className="chat-room-main">
+      <div className="chat-main">
         <ChatHeader
           conversation={activeConversation}
           menuOpen={menuOpen}
@@ -287,6 +293,8 @@ function ChatMain({
           onRevoke={onRevoke}
           onRetry={onRetry}
           onTranslate={handleTranslate}
+          streamingContent={streamingContent}
+          streamingLoading={streamingLoading}
         />
         {translation && (
           <div className="translation-result">
@@ -307,6 +315,9 @@ function ChatMain({
           enterToSend={enterToSend}
           clearAfterSend={clearAfterSend}
           quote={quote}
+          isAIAssistant={isAIAssistant}
+          aiReplySuggestions={aiReplySuggestions}
+          token={getToken()}
           onClearQuote={() => setQuote(null)}
           onContentChange={onDraftChange}
           onSendText={onSendText}

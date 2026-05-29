@@ -41,7 +41,7 @@ function LoginPage({
 
   const isLogin = draft.mode === "login";
   const registerPreviewName = draft.register.nickname || "访客";
-  const roomLength = isLogin
+  const passwordLength = isLogin
     ? draft.login.password.length
     : draft.register.captchaCode.trim().length || draft.register.password.length;
 
@@ -76,8 +76,8 @@ function LoginPage({
           </div>
           <AnimatedCharacters
             nicknameFocused={primaryFocused}
-            roomFocused={secondaryFocused}
-            roomLength={roomLength}
+            passwordFocused={secondaryFocused}
+            passwordLength={passwordLength}
           />
           <div className="login-links">
             <span>项目说明</span>

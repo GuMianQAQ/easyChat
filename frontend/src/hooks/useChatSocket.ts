@@ -20,9 +20,6 @@ import {
   nowLabel,
 } from "./chatSocketHelpers";
 import { resolveWsUrl } from "../config/env";
-import { safeNumber } from "../utils/safeText";
-
-const defaultRoomName = "";
 
 interface JoinSession {
   token: string;
@@ -52,14 +49,20 @@ interface NoticeOptions {
   level?: NotificationItem["level"];
 }
 
+interface StreamingState {
+  streamId: string;
+  conversationId: string;
+  content: string;
+  loading: boolean;
+}
+
 interface UseChatSocketResult {
   status: ConnectionStatus;
   messages: ChatMessage[];
   notifications: NotificationItem[];
-  onlineCount: number;
   currentUserId: string;
   currentUsername: string;
-  roomName: string;
+  streamingState: StreamingState | null;
   join: (session: JoinSession) => void;
   updateProfile: (user: CurrentUser) => void;
   replaceConversationMessages: (conversationId: string, items: ServerMessage[]) => void;
@@ -85,11 +88,10 @@ export function useChatSocket(): UseChatSocketResult {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [onlineCount, setOnlineCount] = useState(0);
   const [currentUserId, setCurrentUserId] = useState("");
   const [currentUsername, setCurrentUsername] = useState("");
   const [currentAvatar, setCurrentAvatar] = useState("");
-  const [roomName, setRoomName] = useState(defaultRoomName);
+  const [streamingState, setStreamingState] = useState<StreamingState | null>(null);
 
   const addSystemNotice = useCallback(
     ({ eventType, title, content, level = "info" }: NoticeOptions) => {
@@ -120,8 +122,7 @@ export function useChatSocket(): UseChatSocketResult {
     sessionRef.current += 1;
     closeSocket();
     setStatus("disconnected");
-    setOnlineCount(0);
-  }, [addSystemNotice, closeSocket]);
+  }, [closeSocket]);
 
   const resetSession = useCallback(() => {
     sessionRef.current += 1;
@@ -129,11 +130,9 @@ export function useChatSocket(): UseChatSocketResult {
     setStatus("disconnected");
     setMessages([]);
     setNotifications([]);
-    setOnlineCount(0);
     setCurrentUserId("");
     setCurrentUsername("");
     setCurrentAvatar("");
-    setRoomName(defaultRoomName);
     lastJoinRef.current = null;
     latestNoticeRef.current = null;
   }, [closeSocket]);
@@ -212,7 +211,6 @@ export function useChatSocket(): UseChatSocketResult {
       setCurrentUserId(session.user.id);
       setCurrentUsername(session.user.nickname);
       setCurrentAvatar(session.user.avatar);
-      setRoomName(defaultRoomName);
       setStatus("connecting");
 
       const socket = new WebSocket(resolveWsUrl(`/ws?token=${encodeURIComponent(token)}`));
@@ -239,12 +237,23 @@ export function useChatSocket(): UseChatSocketResult {
           return;
         }
 
-        if (!["chat", "system", "users", "error", "revoke"].includes(parsed.type)) {
+        if (!["chat", "system", "error", "revoke", "ai-stream-chunk", "ai-stream-done"].includes(parsed.type)) {
           return;
         }
 
-        if (parsed.type === "users") {
-          setOnlineCount(safeNumber(parsed.onlineCount));
+        if (parsed.type === "ai-stream-chunk") {
+          const chunkData = parsed as unknown as { streamId: string; conversationId: string; content: string };
+          setStreamingState((prev) => {
+            if (prev && prev.streamId === chunkData.streamId) {
+              return { ...prev, content: prev.content + chunkData.content, loading: true };
+            }
+            return { streamId: chunkData.streamId, conversationId: chunkData.conversationId, content: chunkData.content, loading: true };
+          });
+          return;
+        }
+
+        if (parsed.type === "ai-stream-done") {
+          setStreamingState(null);
           return;
         }
 
@@ -278,7 +287,6 @@ export function useChatSocket(): UseChatSocketResult {
         }
 
         upsertServerMessages([parsed]);
-        setOnlineCount(safeNumber(parsed.onlineCount));
       };
 
       socket.onerror = () => {
@@ -295,7 +303,6 @@ export function useChatSocket(): UseChatSocketResult {
         }
         socketRef.current = null;
         setStatus((current) => (current === "failed" ? "failed" : "disconnected"));
-        setOnlineCount(0);
       };
     },
     [addSystemNotice, upsertServerMessages],
@@ -332,7 +339,7 @@ export function useChatSocket(): UseChatSocketResult {
         targetName,
         content,
         createdAt: nowLabel(),
-        onlineCount,
+        onlineCount: 0,
         avatar: currentAvatar,
         isSelf: true,
         quote: nextQuote,
@@ -376,7 +383,7 @@ export function useChatSocket(): UseChatSocketResult {
 
       return true;
     },
-    [addSystemNotice, currentAvatar, currentUserId, currentUsername, onlineCount],
+    [addSystemNotice, currentAvatar, currentUserId, currentUsername],
   );
 
   const sendTextMessage = useCallback(
@@ -466,10 +473,8 @@ export function useChatSocket(): UseChatSocketResult {
     status,
     messages,
     notifications,
-    onlineCount,
     currentUserId,
     currentUsername,
-    roomName,
     join: connect,
     updateProfile,
     replaceConversationMessages,
@@ -483,5 +488,6 @@ export function useChatSocket(): UseChatSocketResult {
     disconnect,
     resetSession,
     addSystemNotice,
+    streamingState,
   };
 }

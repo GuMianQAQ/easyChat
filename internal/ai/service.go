@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -22,7 +23,10 @@ const (
 	translateSystemPrompt = "你是一个翻译助手。将用户提供的文本翻译成目标语言。只输出翻译结果，不要解释。"
 	summarySystemPrompt   = "你是一个摘要助手。将用户提供的多条消息总结为简洁的摘要。包含关键话题、主要结论和待办事项（如有）。"
 	replySystemPrompt     = "你是一个回复建议助手。根据用户收到的消息，生成 3 个简短的回复建议。每行一个建议，不要编号。"
-	codeSystemPrompt      = "你是一个代码生成助手。根据用户的需求生成代码。用 markdown 代码块格式输出，包含语言标识。"
+	completeSimplePrompt  = "预测用户接下来要输入的一个词（最多4个字）。只返回预测的词，不要返回其他内容。如果无法预测，返回空字符串。"
+	completeMediumPrompt  = "预测用户接下来要输入的一个短语（2-8个字）。只返回预测的短语，不要返回其他内容。如果无法预测，返回空字符串。"
+	completeComplexPrompt = "预测用户接下来要输入的一句话（最多20个字）。只返回预测的句子，不要返回其他内容。如果无法预测，返回空字符串。"
+	predictQuestionPrompt = "根据用户输入的片段，预测用户可能想问的问题，并给出简短答案。要求：1. 只预测一个问题；2. 答案简洁准确，不超过20个字；3. 如果无法预测，question和answer都返回空字符串。返回JSON格式：{\"question\":\"...\",\"answer\":\"...\"}"
 )
 
 type Service struct {
@@ -104,6 +108,111 @@ func (s *Service) HandleMessage(user auth.PublicUser, conversationID, messageSco
 	return &payload, nil
 }
 
+type StreamResult struct {
+	Content string
+	Payload *chatstore.MessagePayload
+	Error   error
+}
+
+func (s *Service) HandleMessageStream(user auth.PublicUser, conversationID, messageScope, content string) (<-chan string, <-chan StreamResult) {
+	chunkCh := make(chan string, 64)
+	resultCh := make(chan StreamResult, 1)
+
+	go func() {
+		defer close(chunkCh)
+
+		if !s.config.EnableStream {
+			resultCh <- StreamResult{Error: fmt.Errorf("AI 流式功能已关闭")}
+			return
+		}
+
+		query := strings.TrimSpace(strings.TrimPrefix(content, "/ai"))
+		if query == "" {
+			resultCh <- StreamResult{Error: fmt.Errorf("请输入问题内容，例如：/ai 你好")}
+			return
+		}
+
+		history := s.GetConversationHistory(user.ID, conversationID, s.config.ContextWindow)
+		messages := make([]Message, 0, len(history)+2)
+		messages = append(messages, Message{Role: "system", Content: assistantSystemPrompt})
+		messages = append(messages, history...)
+		messages = append(messages, Message{Role: "user", Content: query})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		stream, err := s.provider.Stream(ctx, ChatRequest{
+			Messages:    messages,
+			Temperature: s.config.Temperature,
+			MaxTokens:   s.config.MaxTokens,
+		})
+		if err != nil {
+			resultCh <- StreamResult{Error: fmt.Errorf("AI 服务错误: %v", err)}
+			return
+		}
+
+		var fullContent strings.Builder
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := stream.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				fullContent.WriteString(chunk)
+				select {
+				case chunkCh <- chunk:
+				case <-ctx.Done():
+					resultCh <- StreamResult{Error: ctx.Err()}
+					return
+				}
+			}
+			if readErr != nil {
+				if readErr != io.EOF {
+					resultCh <- StreamResult{Error: fmt.Errorf("读取流失败: %v", readErr)}
+					return
+				}
+				break
+			}
+		}
+
+		finalContent := fullContent.String()
+		if finalContent == "" {
+			resultCh <- StreamResult{Error: fmt.Errorf("AI 返回内容为空")}
+			return
+		}
+
+		if err := s.SaveConversation(user.ID, conversationID, "user", query); err != nil {
+			log.Printf("failed to save user AI conversation: %v", err)
+		}
+		if err := s.SaveConversation(user.ID, conversationID, "assistant", finalContent); err != nil {
+			log.Printf("failed to save assistant AI conversation: %v", err)
+		}
+
+		aiUser := SystemUser()
+		if err := s.store.EnsureMember(conversationID, aiUser.ID); err != nil {
+			log.Printf("failed to ensure AI member: %v", err)
+			resultCh <- StreamResult{Error: fmt.Errorf("AI 加入会话失败: %v", err)}
+			return
+		}
+
+		payload, err := s.store.SaveMessage(aiUser, chatstore.PersistMessageInput{
+			ConversationID: conversationID,
+			MessageScope:   messageScope,
+			MessageType:    "text",
+			Content:        finalContent,
+		})
+		if err != nil {
+			log.Printf("failed to save AI message: %v", err)
+			resultCh <- StreamResult{Error: fmt.Errorf("保存 AI 回复失败")}
+			return
+		}
+
+		s.stats.RecordStream()
+		resultCh <- StreamResult{Content: finalContent, Payload: &payload}
+	}()
+
+	return chunkCh, resultCh
+}
+
 func (s *Service) HandleStream(ctx context.Context, query string) (io.Reader, error) {
 	if !s.config.EnableStream {
 		return nil, fmt.Errorf("AI 流式功能已关闭")
@@ -169,6 +278,66 @@ func (s *Service) Summarize(ctx context.Context, texts []string) (string, error)
 	return resp.Content, nil
 }
 
+func (s *Service) Complete(ctx context.Context, text, granularity string) (string, error) {
+	if !s.config.EnableTools {
+		return "", nil
+	}
+
+	var systemPrompt string
+	switch granularity {
+	case "medium":
+		systemPrompt = completeMediumPrompt
+	case "complex":
+		systemPrompt = completeComplexPrompt
+	default:
+		systemPrompt = completeSimplePrompt
+	}
+
+	resp, err := s.provider.Chat(ctx, ChatRequest{
+		Messages: []Message{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: fmt.Sprintf("用户当前输入: %s", text)},
+		},
+		Temperature: 0.3,
+		MaxTokens:   50,
+	})
+	if err != nil {
+		return "", nil
+	}
+
+	s.stats.RecordComplete()
+	return strings.TrimSpace(resp.Content), nil
+}
+
+func (s *Service) PredictQuestion(ctx context.Context, text string) (string, string, error) {
+	if !s.config.EnableTools {
+		return "", "", nil
+	}
+
+	resp, err := s.provider.Chat(ctx, ChatRequest{
+		Messages: []Message{
+			{Role: "system", Content: predictQuestionPrompt},
+			{Role: "user", Content: fmt.Sprintf("用户当前输入: %s", text)},
+		},
+		Temperature: 0.3,
+		MaxTokens:   100,
+	})
+	if err != nil {
+		return "", "", nil
+	}
+
+	var result struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Content)), &result); err != nil {
+		return "", "", nil
+	}
+
+	s.stats.RecordPredict()
+	return strings.TrimSpace(result.Question), strings.TrimSpace(result.Answer), nil
+}
+
 func (s *Service) GenerateReplies(ctx context.Context, message string) ([]string, error) {
 	if !s.config.EnableTools {
 		return nil, fmt.Errorf("AI 工具功能已关闭")
@@ -201,27 +370,6 @@ func (s *Service) GenerateReplies(ctx context.Context, message string) ([]string
 
 	s.stats.RecordReply()
 	return replies, nil
-}
-
-func (s *Service) GenerateCode(ctx context.Context, query string) (string, error) {
-	if !s.config.EnableTools {
-		return "", fmt.Errorf("AI 工具功能已关闭")
-	}
-
-	resp, err := s.provider.Chat(ctx, ChatRequest{
-		Messages: []Message{
-			{Role: "system", Content: codeSystemPrompt},
-			{Role: "user", Content: query},
-		},
-		Temperature: 0.2,
-		MaxTokens:   2000,
-	})
-	if err != nil {
-		return "", fmt.Errorf("代码生成失败: %v", err)
-	}
-
-	s.stats.RecordCode()
-	return resp.Content, nil
 }
 
 func (s *Service) SaveConversation(userID, conversationID, role, content string) error {
@@ -266,7 +414,7 @@ func (s *Service) SaveEmbedding(conversationID, messageID, content string, embed
 	return s.db.Create(&record).Error
 }
 
-func (s *Service) SearchSimilar(conversationID, query string, limit int) ([]string, error) {
+func (s *Service) SearchHybrid(conversationID, query string, limit int) ([]SearchResultItem, error) {
 	if !s.config.EnableSearch {
 		return nil, fmt.Errorf("AI 搜索功能已关闭")
 	}
@@ -283,59 +431,15 @@ func (s *Service) SearchSimilar(conversationID, query string, limit int) ([]stri
 	}
 
 	var records []AIEmbedding
-	s.db.Where("conversation_id = ?", conversationID).Limit(limit * 3).Find(&records)
+	dbQuery := s.db
+	if conversationID != "" {
+		dbQuery = dbQuery.Where("conversation_id = ?", conversationID)
+	}
+	dbQuery.Limit(limit * 3).Find(&records)
 
 	type scored struct {
-		content string
-		score   float64
-	}
-	results := make([]scored, 0, len(records))
-	for _, record := range records {
-		embedding := decodeEmbedding(record.Embedding)
-		if embedding == nil {
-			continue
-		}
-		results = append(results, scored{
-			content: record.Content,
-			score:   cosineSimilarity(queryEmbedding, embedding),
-		})
-	}
-
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].score > results[j].score
-	})
-
-	contents := make([]string, 0, limit)
-	for i := 0; i < len(results) && i < limit; i++ {
-		contents = append(contents, results[i].content)
-	}
-
-	s.stats.RecordSearch()
-	return contents, nil
-}
-
-func (s *Service) SearchHybrid(conversationID, query string, limit int) ([]string, error) {
-	if !s.config.EnableSearch {
-		return nil, fmt.Errorf("AI 搜索功能已关闭")
-	}
-	if limit <= 0 {
-		limit = 10
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	queryEmbedding, err := s.provider.Embed(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("生成查询向量失败: %v", err)
-	}
-
-	var records []AIEmbedding
-	s.db.Where("conversation_id = ?", conversationID).Limit(limit * 3).Find(&records)
-
-	type scored struct {
-		content string
-		score   float64
+		record AIEmbedding
+		score  float64
 	}
 	results := make([]scored, 0, len(records))
 
@@ -352,8 +456,8 @@ func (s *Service) SearchHybrid(conversationID, query string, limit int) ([]strin
 		}
 
 		results = append(results, scored{
-			content: record.Content,
-			score:   keywordScore*0.4 + semanticScore*0.6,
+			record: record,
+			score:  keywordScore*0.4 + semanticScore*0.6,
 		})
 	}
 
@@ -361,13 +465,22 @@ func (s *Service) SearchHybrid(conversationID, query string, limit int) ([]strin
 		return results[i].score > results[j].score
 	})
 
-	contents := make([]string, 0, limit)
+	items := make([]SearchResultItem, 0, limit)
 	for i := 0; i < len(results) && i < limit; i++ {
-		contents = append(contents, results[i].content)
+		r := results[i].record
+		items = append(items, SearchResultItem{
+			MessageID:        r.MessageID,
+			ConversationID:   r.ConversationID,
+			ConversationName: r.ConversationID,
+			SenderName:       "",
+			Content:          r.Content,
+			CreatedAt:        r.CreatedAt.Format("2006-01-02 15:04:05"),
+			Score:            results[i].score,
+		})
 	}
 
 	s.stats.RecordSearch()
-	return contents, nil
+	return items, nil
 }
 
 func encodeEmbedding(embedding []float64) []byte {

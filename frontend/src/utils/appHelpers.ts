@@ -39,6 +39,13 @@ export const DEFAULT_SETTINGS: UserSettings = {
   rememberProfile: true,
   clearAfterSend: true,
   enterToSend: true,
+  aiReplySuggestions: false,
+  aiSearchEnabled: false,
+  inputCompletion: false,
+  completionGranularity: "simple",
+  completionScope: "all",
+  questionPrediction: false,
+  questionPredictionScope: "all",
 };
 
 export const DEFAULT_PRIVACY: PrivacySettings = {

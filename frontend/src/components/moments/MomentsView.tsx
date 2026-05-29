@@ -147,7 +147,7 @@ function MomentsFeed({
               {commentingId === moment.id ? (
                 <div className="moments-post-comments">
                   <CommentsSection
-                    comments={moment.comments}
+                    comments={moment.comments || []}
                     momentId={moment.id}
                     onAddComment={onAddComment}
                     onDeleteComment={onDeleteComment}

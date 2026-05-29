@@ -290,9 +290,3 @@
 .contact-person-entry-indented {
   padding-left: 4px;
 }
-
-.contacts-empty-state {
-  flex: 1;
-  display: grid;
-  place-items: center;
-}

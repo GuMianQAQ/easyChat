@@ -1,5 +1,5 @@
 import type { ChatMessage, MessageQuote, NotificationItem, ServerMessage } from "../types/chat";
-import { safeNumber, safeText } from "../utils/safeText";
+import { safeText } from "../utils/safeText";
 
 export function createId(prefix: string, seed: number): string {
   return `${prefix}-${Date.now()}-${seed}`;
@@ -81,7 +81,7 @@ export function mapIncomingMessage(message: ServerMessage, currentUserId: string
     targetName: safeText(message.targetName),
     content,
     createdAt: safeText(message.createdAt),
-    onlineCount: safeNumber(message.onlineCount),
+    onlineCount: 0,
     avatar: safeText(message.avatar),
     isSelf,
     quote: normalizeQuote(message.quote),

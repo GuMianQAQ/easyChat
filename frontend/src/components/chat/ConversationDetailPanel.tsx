@@ -2,6 +2,8 @@ import { Camera, ChevronRight, LoaderCircle, Pencil, Search } from "lucide-react
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { ChatMessage, Conversation, GroupConversationPayload } from "../../types/chat";
+import { resolveApiUrl } from "../../config/env";
+import { getToken } from "../../utils/auth";
 import Avatar from "../common/Avatar";
 import Switch from "../settings/Switch";
 
@@ -228,6 +230,8 @@ function ConversationDetailPanel({
   const [dangerAction, setDangerAction] = useState<GroupDangerAction | null>(null);
   const [dangerPending, setDangerPending] = useState(false);
   const [dangerError, setDangerError] = useState("");
+  const [summaryContent, setSummaryContent] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -239,6 +243,8 @@ function ConversationDetailPanel({
     setDangerAction(null);
     setDangerPending(false);
     setDangerError("");
+    setSummaryContent(null);
+    setSummaryLoading(false);
   }, [conversation.id]);
 
   const searchResults = useMemo(() => {
@@ -422,21 +428,6 @@ function ConversationDetailPanel({
                   editable
                   onSave={(value) => saveGroupPatch({ myNickname: value })}
                 />
-                <div className="conversation-profile-item conversation-profile-item-switch">
-                  <div className="conversation-profile-item-body">
-                    <div className="conversation-detail-row-main">
-                      <strong>群机器人</strong>
-                    </div>
-                    <Switch
-                      checked={groupBotEnabled}
-                      disabled={!isGroupOwner}
-                      onChange={async (next) => {
-                        await onUpdateGroupBotEnabled(conversation.id, next);
-                      }}
-                      label="群机器人"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
           </>
@@ -489,6 +480,43 @@ function ConversationDetailPanel({
               )
             ) : null}
           </div>
+        ) : null}
+
+        {isGroup ? (
+          <button
+            type="button"
+            className="conversation-detail-row conversation-detail-row-button"
+            disabled={summaryLoading}
+            onClick={async () => {
+              const token = getToken();
+              const texts = messages.slice(-20).map((m) => `${m.senderName}: ${m.content}`);
+              setSummaryLoading(true);
+              try {
+                const resp = await fetch(resolveApiUrl("/api/ai/summarize"), {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ texts }),
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                  setSummaryContent(data.summary || "暂无摘要");
+                } else {
+                  setSummaryContent(data.error || "摘要生成失败");
+                }
+              } catch {
+                setSummaryContent("摘要请求失败");
+              } finally {
+                setSummaryLoading(false);
+              }
+            }}
+          >
+            <div className="conversation-detail-row-main">
+              <strong>{summaryLoading ? "生成中..." : "生成未读摘要"}</strong>
+            </div>
+          </button>
         ) : null}
 
         {isGroup ? (
@@ -592,6 +620,26 @@ function ConversationDetailPanel({
                 }}
               >
                 {dangerPending ? "处理中..." : confirmActionLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {summaryContent !== null ? (
+        <div className="conversation-danger-mask" onClick={() => setSummaryContent(null)}>
+          <div className="conversation-danger-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="conversation-danger-dialog-copy">
+              <strong>消息摘要</strong>
+              <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{summaryContent}</p>
+            </div>
+            <div className="conversation-danger-dialog-actions">
+              <button
+                type="button"
+                className="conversation-danger-dialog-button conversation-danger-dialog-button-confirm"
+                onClick={() => setSummaryContent(null)}
+              >
+                关闭
               </button>
             </div>
           </div>

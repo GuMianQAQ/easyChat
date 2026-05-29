@@ -349,6 +349,10 @@ func (s *Service) buildMomentItems(posts []Moment, viewerID string) ([]MomentIte
 		if err != nil {
 			return nil, err
 		}
+		comments := commentItemsByMoment[post.ID]
+		if comments == nil {
+			comments = []CommentItem{}
+		}
 		items = append(items, MomentItem{
 			ID:        post.ID,
 			AuthorID:  post.AuthorID,
@@ -357,7 +361,7 @@ func (s *Service) buildMomentItems(posts []Moment, viewerID string) ([]MomentIte
 			Images:    images,
 			LikeCount: likeCounts[post.ID],
 			LikedByMe: likedByViewer[post.ID],
-			Comments:  commentItemsByMoment[post.ID],
+			Comments:  comments,
 			CanDelete: post.AuthorID == viewerID,
 			CreatedAt: post.CreatedAt.Format("2006-01-02 15:04:05"),
 		})

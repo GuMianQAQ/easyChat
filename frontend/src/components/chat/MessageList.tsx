@@ -34,6 +34,8 @@ interface MessageListProps {
   onRevoke: (message: ChatMessage) => void;
   onRetry: (messageId: string) => void;
   onTranslate?: (message: ChatMessage) => void;
+  streamingContent?: string;
+  streamingLoading?: boolean;
 }
 
 interface ContextMenuState {
@@ -80,6 +82,8 @@ function MessageList({
   onRevoke,
   onRetry,
   onTranslate,
+  streamingContent,
+  streamingLoading,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -323,6 +327,24 @@ function MessageList({
           );
         })
       )}
+
+      {streamingContent ? (
+        <div className="message-row">
+          <div className="message-stack">
+            <div className="message-meta">
+              <span>AI 助手</span>
+            </div>
+            <div className="message-bubble-wrap">
+              <article className="message-bubble message-bubble-other">
+                <div className="message-content">
+                  {streamingContent}
+                  {streamingLoading ? <span className="ai-stream-cursor" /> : null}
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {contextMenu ? (
         <div ref={menuRef}>

@@ -1,8 +1,10 @@
 import { Camera } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
+  CompletionGranularity,
   CurrentUser,
   FriendItem,
+  PredictionScope,
   PrivacySettings,
   ThemeMode,
   UserSettings,
@@ -19,7 +21,6 @@ interface SettingsDetailProps {
   settings: UserSettings;
   username: string;
   nickname: string;
-  roomName: string;
   avatar: string;
   gender: CurrentUser["gender"];
   region: string;
@@ -58,7 +59,6 @@ export default function SettingsDetail({
   settings,
   username,
   nickname,
-  roomName,
   avatar,
   gender,
   region,
@@ -120,10 +120,22 @@ export default function SettingsDetail({
   };
 
   const updateBoolean = (
-    key: "rememberProfile" | "clearAfterSend" | "enterToSend",
+    key: "rememberProfile" | "clearAfterSend" | "enterToSend" | "aiReplySuggestions" | "aiSearchEnabled" | "inputCompletion" | "questionPrediction",
     value: boolean,
   ) => {
     onSettingsChange((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const updateCompletionGranularity = (granularity: CompletionGranularity) => {
+    onSettingsChange((previous) => ({ ...previous, completionGranularity: granularity }));
+  };
+
+  const updateCompletionScope = (scope: PredictionScope) => {
+    onSettingsChange((previous) => ({ ...previous, completionScope: scope }));
+  };
+
+  const updateQuestionPredictionScope = (scope: PredictionScope) => {
+    onSettingsChange((previous) => ({ ...previous, questionPredictionScope: scope }));
   };
 
   const stopEditing = () => {
@@ -376,7 +388,6 @@ export default function SettingsDetail({
           </SettingsRow>
 
           <SettingsRow label="账号" description="登录账号" control={<span>{username}</span>} />
-          <SettingsRow label="房间" description="当前会话" control={<span>{roomName}</span>} />
 
           <SettingsRow
             label="性别"
@@ -533,13 +544,13 @@ export default function SettingsDetail({
 
         <SettingsSection id="settings-preferences" title="偏好">
           <SettingsRow
-            label="记住昵称"
-            description="下次打开时自动填入"
+            label="记住账号"
+            description="下次打开时自动填入账号"
             control={
               <Switch
                 checked={settings.rememberProfile}
                 onChange={(value) => updateBoolean("rememberProfile", value)}
-                label="记住昵称"
+                label="记住账号"
               />
             }
           />
@@ -562,6 +573,173 @@ export default function SettingsDetail({
                 checked={settings.enterToSend}
                 onChange={(value) => updateBoolean("enterToSend", value)}
                 label="Enter 发送"
+              />
+            }
+          />
+        </SettingsSection>
+
+        <SettingsSection id="settings-ai" title="AI 功能">
+          <SettingsRow
+            label="智能回复建议"
+            description="在 AI 助手会话中自动显示回复建议"
+            control={
+              <Switch
+                checked={settings.aiReplySuggestions}
+                onChange={(value) => updateBoolean("aiReplySuggestions", value)}
+                label="智能回复建议"
+              />
+            }
+          />
+          <SettingsRow
+            label="输入补全"
+            description="预测用户接下来要输入的内容，按 Tab 补全。关闭后不会调用 AI，节省 token"
+            control={
+              <Switch
+                checked={settings.inputCompletion}
+                onChange={(value) => updateBoolean("inputCompletion", value)}
+                label="输入补全"
+              />
+            }
+          />
+          {settings.inputCompletion ? (
+            <>
+              <SettingsRow
+                label="补全粒度"
+                description="简单：下一个词；中等：下一个短语；复杂：下一句话"
+                control={
+                  <div className="settings-radio-group">
+                    <label>
+                      <input
+                        type="radio"
+                        name="completionGranularity"
+                        value="simple"
+                        checked={settings.completionGranularity === "simple"}
+                        onChange={() => updateCompletionGranularity("simple")}
+                      />
+                      简单
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="completionGranularity"
+                        value="medium"
+                        checked={settings.completionGranularity === "medium"}
+                        onChange={() => updateCompletionGranularity("medium")}
+                      />
+                      中等
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="completionGranularity"
+                        value="complex"
+                        checked={settings.completionGranularity === "complex"}
+                        onChange={() => updateCompletionGranularity("complex")}
+                      />
+                      复杂
+                    </label>
+                  </div>
+                }
+              />
+              <SettingsRow
+                label="补全范围"
+                description="选择在哪些会话中启用输入补全"
+                control={
+                  <div className="settings-radio-group">
+                    <label>
+                      <input
+                        type="radio"
+                        name="completionScope"
+                        value="all"
+                        checked={settings.completionScope === "all"}
+                        onChange={() => updateCompletionScope("all")}
+                      />
+                      所有会话
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="completionScope"
+                        value="ai"
+                        checked={settings.completionScope === "ai"}
+                        onChange={() => updateCompletionScope("ai")}
+                      />
+                      仅 AI 助手
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="completionScope"
+                        value="normal"
+                        checked={settings.completionScope === "normal"}
+                        onChange={() => updateCompletionScope("normal")}
+                      />
+                      仅普通会话
+                    </label>
+                  </div>
+                }
+              />
+            </>
+          ) : null}
+          <SettingsRow
+            label="问答预测"
+            description="根据输入预测可能的问题并显示答案。关闭后不会调用 AI，节省 token"
+            control={
+              <Switch
+                checked={settings.questionPrediction}
+                onChange={(value) => updateBoolean("questionPrediction", value)}
+                label="问答预测"
+              />
+            }
+          />
+          {settings.questionPrediction ? (
+            <SettingsRow
+              label="预测范围"
+              description="选择在哪些会话中启用问答预测"
+              control={
+                <div className="settings-radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      name="questionPredictionScope"
+                      value="all"
+                      checked={settings.questionPredictionScope === "all"}
+                      onChange={() => updateQuestionPredictionScope("all")}
+                    />
+                    所有会话
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="questionPredictionScope"
+                      value="ai"
+                      checked={settings.questionPredictionScope === "ai"}
+                      onChange={() => updateQuestionPredictionScope("ai")}
+                    />
+                    仅 AI 助手
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="questionPredictionScope"
+                      value="normal"
+                      checked={settings.questionPredictionScope === "normal"}
+                      onChange={() => updateQuestionPredictionScope("normal")}
+                    />
+                    仅普通会话
+                  </label>
+                </div>
+              }
+            />
+          ) : null}
+          <SettingsRow
+            label="AI 语义搜索"
+            description="在搜索面板中启用 AI 聊天记录搜索"
+            control={
+              <Switch
+                checked={settings.aiSearchEnabled}
+                onChange={(value) => updateBoolean("aiSearchEnabled", value)}
+                label="AI 语义搜索"
               />
             }
           />

@@ -18,7 +18,8 @@ func (s *Server) registerAIRoutes(api *gin.RouterGroup) {
 	ai.POST("/translate", s.handleAITranslate)
 	ai.POST("/summarize", s.handleAISummarize)
 	ai.POST("/generate-replies", s.handleAIGenerateReplies)
-	ai.POST("/generate-code", s.handleAIGenerateCode)
+	ai.POST("/complete", s.handleAIComplete)
+	ai.POST("/predict-question", s.handleAIPredictQuestion)
 	ai.GET("/search", s.handleAISearch)
 	ai.GET("/stats", s.handleAIStats)
 }
@@ -168,26 +169,49 @@ func (s *Server) handleAIGenerateReplies(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"replies": replies})
 }
 
-func (s *Server) handleAIGenerateCode(c *gin.Context) {
+func (s *Server) handleAIComplete(c *gin.Context) {
 	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
 	var req struct {
-		Query string `json:"query"`
+		Text        string `json:"text"`
+		Granularity string `json:"granularity"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
 		return
 	}
 
-	result, err := s.AI.GenerateCode(c.Request.Context(), req.Query)
+	completion, err := s.AI.Complete(c.Request.Context(), req.Text, req.Granularity)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": result})
+	c.JSON(http.StatusOK, gin.H{"completion": completion})
+}
+
+func (s *Server) handleAIPredictQuestion(c *gin.Context) {
+	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	var req struct {
+		Text string `json:"text"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
+		return
+	}
+
+	question, answer, err := s.AI.PredictQuestion(c.Request.Context(), req.Text)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"question": question, "answer": answer})
 }
 
 func (s *Server) handleAISearch(c *gin.Context) {
@@ -198,8 +222,8 @@ func (s *Server) handleAISearch(c *gin.Context) {
 
 	query := strings.TrimSpace(c.Query("q"))
 	conversationID := strings.TrimSpace(c.Query("conversationId"))
-	if query == "" || conversationID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 q 或 conversationId 参数"})
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 q 参数"})
 		return
 	}
 

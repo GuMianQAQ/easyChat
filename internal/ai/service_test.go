@@ -70,19 +70,6 @@ func TestGenerateReplies(t *testing.T) {
 	}
 }
 
-func TestGenerateCode(t *testing.T) {
-	mock := &MockProvider{response: "```go\nfmt.Println(\"hello\")\n```"}
-	service := NewService(mock, nil, nil, DefaultConfig())
-
-	result, err := service.GenerateCode(context.Background(), "写一个hello world")
-	if err != nil {
-		t.Fatalf("GenerateCode() error: %v", err)
-	}
-	if !strings.Contains(result, "fmt.Println") {
-		t.Errorf("expected code block, got '%s'", result)
-	}
-}
-
 func TestEncodeDecodeEmbedding(t *testing.T) {
 	original := []float64{0.1, 0.2, 0.3, -0.5, 1.0}
 	encoded := encodeEmbedding(original)

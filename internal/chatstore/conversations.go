@@ -449,16 +449,16 @@ func (s *Service) buildConversationSummary(currentUserID string, conversation Co
 }
 
 func (s *Service) privatePartner(conversationID, currentUserID string) (auth.User, error) {
+	if strings.Contains(conversationID, "ai-assistant") {
+		return s.lookupUser("ai-assistant")
+	}
+
 	var members []ConversationMember
 	if err := s.db.Where("conversation_id = ?", conversationID).Find(&members).Error; err != nil {
 		return auth.User{}, err
 	}
-	hasAIPartner := len(members) > 2
 	for _, member := range members {
 		if member.UserID == currentUserID {
-			continue
-		}
-		if hasAIPartner && member.UserID == "ai-assistant" {
 			continue
 		}
 		return s.lookupUser(member.UserID)

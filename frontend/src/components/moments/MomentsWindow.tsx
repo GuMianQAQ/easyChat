@@ -12,7 +12,7 @@ import {
   unlikeMoment,
 } from "../../utils/momentsApi";
 import { uploadImage } from "../../utils/chatApi";
-import { fetchCurrentUser, updateProfile } from "../../utils/auth";
+import { fetchCurrentUser, getToken, updateProfile } from "../../utils/auth";
 import { fetchUserProfile } from "../../utils/friendsApi";
 import { currentUserToProfile } from "../../utils/appHelpers";
 import { resolveMediaUrl } from "../../config/env";
@@ -55,23 +55,6 @@ type FeedbackTone = "success" | "error" | "info";
 interface FeedbackState {
   tone: FeedbackTone;
   text: string;
-}
-
-function getToken(): string {
-  try {
-    const stored = localStorage.getItem("easychat:token");
-    if (!stored) {
-      return "";
-    }
-    try {
-      const parsed = JSON.parse(stored);
-      return typeof parsed === "string" ? parsed : "";
-    } catch {
-      return stored;
-    }
-  } catch {
-    return "";
-  }
 }
 
 function isDataUrlLike(value: string): boolean {

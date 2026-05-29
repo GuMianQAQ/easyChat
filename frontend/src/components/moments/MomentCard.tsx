@@ -23,6 +23,8 @@ export default function MomentCard({
   readOnly = false,
 }: MomentCardProps) {
   const timeAgo = formatTimeAgo(moment.createdAt);
+  const comments = moment.comments || [];
+  const images = moment.images || [];
   const likers =
     moment.likeCount > 0
       ? moment.likedByMe
@@ -64,9 +66,9 @@ export default function MomentCard({
 
       <div className="moments-post-body">
         {moment.content ? <p className="moments-post-text">{moment.content}</p> : null}
-        {moment.images.length > 0 ? (
+        {images.length > 0 ? (
           <div className="moments-post-media">
-            {moment.images.map((src, index) => (
+            {images.map((src, index) => (
               <div
                 key={index}
                 className="moments-post-media-item"
@@ -93,9 +95,9 @@ export default function MomentCard({
           </div>
         ) : null}
 
-        {moment.comments.length > 0 ? (
+        {comments.length > 0 ? (
           <div className="moments-post-comments-box">
-            {moment.comments.slice(0, 3).map((comment) => (
+            {comments.slice(0, 3).map((comment) => (
               <div key={comment.id} className="moments-post-comment-inline">
                 <span
                   className="moments-post-comment-author"
@@ -106,9 +108,9 @@ export default function MomentCard({
                 <span className="moments-post-comment-content">: {comment.content}</span>
               </div>
             ))}
-            {moment.comments.length > 3 ? (
+            {comments.length > 3 ? (
               <span className="moments-post-comments-more">
-                查看全部 {moment.comments.length} 条评论
+                查看全部 {comments.length} 条评论
               </span>
             ) : null}
           </div>

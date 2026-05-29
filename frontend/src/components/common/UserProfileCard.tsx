@@ -2,6 +2,7 @@ import { ChevronRight, MessageCircle, MoreHorizontal, Phone, Settings, UserPlus,
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ContactItem, UserProfile } from "../../types/chat";
 import { fetchMomentsFeed } from "../../utils/momentsApi";
+import { getToken } from "../../utils/auth";
 import ContactEditModal from "../contacts/ContactEditModal";
 import { sourceLabel as contactSourceLabel } from "../contacts/contactHelpers";
 import Avatar from "./Avatar";
@@ -33,23 +34,6 @@ interface UserProfileCardProps {
   onToggleBlock?: (friendId: string, nextBlocked: boolean) => void;
   onDeleteFriend?: (friendId: string) => void;
   onUploadImage?: (file: File) => Promise<string>;
-}
-
-function getToken(): string {
-  try {
-    const stored = localStorage.getItem("easychat:token");
-    if (!stored) {
-      return "";
-    }
-    try {
-      const parsed = JSON.parse(stored);
-      return typeof parsed === "string" ? parsed : "";
-    } catch {
-      return stored;
-    }
-  } catch {
-    return "";
-  }
 }
 
 function genderMeta(gender?: UserProfile["gender"]) {

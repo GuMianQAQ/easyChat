@@ -135,14 +135,14 @@ function EyeBall({
 
 interface AnimatedCharactersProps {
   nicknameFocused: boolean;
-  roomFocused: boolean;
-  roomLength: number;
+  passwordFocused: boolean;
+  passwordLength: number;
 }
 
 function AnimatedCharacters({
   nicknameFocused,
-  roomFocused,
-  roomLength,
+  passwordFocused,
+  passwordLength,
 }: AnimatedCharactersProps) {
   const [mouseX, setMouseX] = useState(0);
   const [mouseY, setMouseY] = useState(0);
@@ -233,8 +233,8 @@ function AnimatedCharacters({
   const orangePos = calculatePosition(orangeRef);
   const yellowPos = calculatePosition(yellowRef);
 
-  const isLookingAway = roomFocused;
-  const hasRoomValue = roomLength > 0;
+  const isLookingAway = passwordFocused;
+  const hasPasswordValue = passwordLength > 0;
 
   const baseStyle = (
     backgroundColor: string,
@@ -448,7 +448,7 @@ function AnimatedCharacters({
         />
       </div>
 
-      {hasRoomValue ? (
+      {hasPasswordValue ? (
         <div
           style={{
             position: "absolute",

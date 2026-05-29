@@ -1,7 +1,10 @@
 import { File, Image, Scissors, Smile } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import type { MessageQuote } from "../../types/chat";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CompletionGranularity, MessageQuote, PredictionScope } from "../../types/chat";
+import { resolveApiUrl } from "../../config/env";
 import { prepareImageDataUrl } from "../../utils/media";
+import { useInputCompletion } from "../../hooks/useInputCompletion";
+import { useQuestionPrediction } from "../../hooks/useQuestionPrediction";
 import EmojiPicker from "./EmojiPicker";
 import QuotePreview from "./QuotePreview";
 
@@ -14,6 +17,14 @@ interface MessageComposerProps {
   enterToSend: boolean;
   clearAfterSend: boolean;
   quote?: MessageQuote | null;
+  isAIAssistant?: boolean;
+  aiReplySuggestions?: boolean;
+  inputCompletion?: boolean;
+  completionGranularity?: CompletionGranularity;
+  completionScope?: PredictionScope;
+  questionPrediction?: boolean;
+  questionPredictionScope?: PredictionScope;
+  token?: string;
   onClearQuote: () => void;
   onContentChange: (value: string) => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
@@ -31,6 +42,14 @@ function MessageComposer({
   enterToSend,
   clearAfterSend,
   quote,
+  isAIAssistant,
+  aiReplySuggestions,
+  inputCompletion,
+  completionGranularity = "simple",
+  completionScope = "all",
+  questionPrediction,
+  questionPredictionScope = "all",
+  token,
   onClearQuote,
   onContentChange,
   onSendText,
@@ -39,9 +58,28 @@ function MessageComposer({
   onNotice,
 }: MessageComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [suggestion, setSuggestion] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const selectionRef = useRef({ start: 0, end: 0 });
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { completion, dismissCompletion } = useInputCompletion({
+    content,
+    enabled: inputCompletion ?? false,
+    granularity: completionGranularity,
+    scope: completionScope,
+    isAIAssistant: isAIAssistant ?? false,
+    token: token ?? "",
+  });
+
+  const { question, answer, dismiss: dismissPrediction } = useQuestionPrediction({
+    content,
+    enabled: questionPrediction ?? false,
+    scope: questionPredictionScope,
+    isAIAssistant: isAIAssistant ?? false,
+    token: token ?? "",
+  });
 
   const submit = () => {
     const trimmed = content.trim();
@@ -94,8 +132,56 @@ function MessageComposer({
     }
   };
 
+  const fetchSuggestion = useCallback(async () => {
+    if (!isAIAssistant || !aiReplySuggestions || !token || !content.trim()) {
+      setSuggestion("");
+      return;
+    }
+
+    try {
+      const resp = await fetch(resolveApiUrl("/api/ai/generate-replies"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: content }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.replies && data.replies.length > 0) {
+        setSuggestion(data.replies[0]);
+      } else {
+        setSuggestion("");
+      }
+    } catch {
+      setSuggestion("");
+    }
+  }, [isAIAssistant, aiReplySuggestions, token, content]);
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    if (!isAIAssistant || !aiReplySuggestions || !content.trim()) {
+      setSuggestion("");
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      void fetchSuggestion();
+    }, 500);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [content, isAIAssistant, aiReplySuggestions, fetchSuggestion]);
+
   useEffect(() => {
     setEmojiOpen(false);
+    setSuggestion("");
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -194,12 +280,31 @@ function MessageComposer({
             await sendImageFile(file);
           }}
           onKeyDown={(event) => {
-            if (enterToSend && event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Tab" && completion) {
+              event.preventDefault();
+              onContentChange(content + completion);
+              dismissCompletion();
+            } else if (event.key === "Escape" && completion) {
+              event.preventDefault();
+              dismissCompletion();
+            } else if (event.key === "Tab" && suggestion) {
+              event.preventDefault();
+              onContentChange(suggestion);
+              setSuggestion("");
+            } else if (event.key === "Escape" && suggestion) {
+              event.preventDefault();
+              setSuggestion("");
+            } else if (enterToSend && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               submit();
             }
           }}
         />
+        {completion ? (
+          <div className="ghost-overlay" aria-hidden="true">
+            <span className="ghost-text">{content}{completion}</span>
+          </div>
+        ) : null}
         {emojiOpen ? (
           <div className="composer-emoji-popover">
             <EmojiPicker
@@ -212,6 +317,26 @@ function MessageComposer({
           </div>
         ) : null}
       </div>
+
+      {question && answer ? (
+        <div className="question-prediction">
+          <div className="question-prediction-header">你可能想知道:</div>
+          <div className="question-prediction-content" onClick={() => {
+            onContentChange(question);
+            dismissPrediction();
+          }}>
+            <span className="question-prediction-question">{question}</span>
+            <span className="question-prediction-answer">→ {answer}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {suggestion && isAIAssistant && aiReplySuggestions ? (
+        <div className="ai-suggestions">
+          <span className="ai-suggestion-text">{suggestion}</span>
+          <span className="ai-suggestion-hint">按 Tab 补全</span>
+        </div>
+      ) : null}
 
       <div className="composer-footer">
         <span>{content.trim().length}/500</span>

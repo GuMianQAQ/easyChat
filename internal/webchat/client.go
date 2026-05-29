@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -315,14 +316,41 @@ func privateTargetUserID(conversationID, currentUserID string) (string, error) {
 }
 
 func (c *Client) handleAICommand(user auth.PublicUser, validated *ValidatedInput, content string) {
+	streamID := fmt.Sprintf("stream-%d", time.Now().UnixMilli())
+	chunkCh, resultCh := c.ai.HandleMessageStream(user, validated.ConversationID, validated.MessageScope, content)
+
 	go func() {
-		payload, err := c.ai.HandleMessage(user, validated.ConversationID, validated.MessageScope, content)
-		if err != nil {
-			c.sendError(err.Error())
+		for chunk := range chunkCh {
+			msg := NewAIStreamChunk(streamID, validated.ConversationID, chunk)
+			data, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("failed to marshal stream chunk: %v", err)
+				continue
+			}
+			select {
+			case c.send <- data:
+			default:
+			}
+		}
+
+		result := <-resultCh
+		if result.Error != nil {
+			c.sendError(result.Error.Error())
 			return
 		}
 
-		wireMessage := payloadToWire(*payload)
+		doneMsg := NewAIStreamDone(streamID, validated.ConversationID, result.Payload.ID)
+		doneData, err := json.Marshal(doneMsg)
+		if err != nil {
+			log.Printf("failed to marshal stream done: %v", err)
+		} else {
+			select {
+			case c.send <- doneData:
+			default:
+			}
+		}
+
+		wireMessage := payloadToWire(*result.Payload)
 		if wireMessage.MessageScope == ScopePrivate {
 			c.hub.BroadcastPrivate(wireMessage, c.UserID)
 			return

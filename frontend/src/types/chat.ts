@@ -1,4 +1,4 @@
-export type MessageType = "chat" | "system" | "users" | "error" | "revoke";
+export type MessageType = "chat" | "system" | "error" | "revoke" | "ai-stream-chunk" | "ai-stream-done";
 export type ChatMessageType = "text" | "image" | "file";
 export type MessageStatus = "sending" | "sent" | "failed";
 export type MessageScope = "private" | "group" | "system";
@@ -362,9 +362,19 @@ export interface MomentCommentItem {
   createdAt: string;
 }
 
+export type CompletionGranularity = 'simple' | 'medium' | 'complex';
+export type PredictionScope = 'all' | 'ai' | 'normal';
+
 export interface UserSettings {
   theme: ThemeMode;
   rememberProfile: boolean;
   clearAfterSend: boolean;
   enterToSend: boolean;
+  aiReplySuggestions: boolean;
+  aiSearchEnabled: boolean;
+  inputCompletion: boolean;
+  completionGranularity: CompletionGranularity;
+  completionScope: PredictionScope;
+  questionPrediction: boolean;
+  questionPredictionScope: PredictionScope;
 }

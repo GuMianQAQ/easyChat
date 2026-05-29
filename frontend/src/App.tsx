@@ -130,7 +130,6 @@ function App() {
     messages,
     notifications,
     currentUserId,
-    roomName,
     join,
     updateProfile: updateRealtimeProfile,
     replaceConversationMessages,
@@ -144,6 +143,7 @@ function App() {
     disconnect,
     resetSession,
     addSystemNotice,
+    streamingState,
   } = useChatSocket();
   const { syncIncomingAttention } = useDesktopAttention({
     activeConversationId,
@@ -931,6 +931,8 @@ function App() {
           clearAfterSend: storedSettings.clearAfterSend,
           composerDisabledReason: activePrivateDisabledReason,
           draftContent: currentConversationDraft,
+          streamingContent: streamingState?.conversationId === activeConversationId ? streamingState.content : undefined,
+          streamingLoading: streamingState?.conversationId === activeConversationId ? streamingState.loading : undefined,
         }}
         chatActions={{
           onConversationChange: openConversation,
@@ -1027,7 +1029,6 @@ function App() {
         selectedContact={selectedContact}
         privacySettings={privacySettings}
         blockedFriends={blockedFriends}
-        roomName={roomName}
         friendPanelOpen={friendPanelOpen}
         createGroupPanelOpen={createGroupPanelOpen}
         friendSearchResult={friendSearchResult}

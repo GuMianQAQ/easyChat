@@ -1,6 +1,8 @@
+import { useState } from "react";
 import AddFriendPanel from "../chat/AddFriendPanel";
 import ChatView from "../chat/ChatView";
 import CreateGroupPanel from "../chat/CreateGroupPanel";
+import SearchPanel from "../chat/SearchPanel";
 import UserProfileCard from "../common/UserProfileCard";
 import ContactsView from "../contacts/ContactsView";
 import FavoritesView from "../favorites/FavoritesView";
@@ -8,6 +10,7 @@ import FilesView from "../files/FilesView";
 import MainLayout from "../layout/MainLayout";
 import SettingsView from "../settings/SettingsView";
 import DesktopWindowFrame from "./DesktopWindowFrame";
+import { getToken } from "../../utils/auth";
 import type {
   ChatMessage,
   ConnectionStatus,
@@ -61,6 +64,8 @@ interface ChatShellState {
   clearAfterSend: boolean;
   composerDisabledReason: string;
   draftContent: string;
+  streamingContent?: string;
+  streamingLoading?: boolean;
 }
 
 interface ChatShellActions {
@@ -129,7 +134,6 @@ interface AppShellProps {
   selectedContact?: ContactItem;
   privacySettings: PrivacySettings;
   blockedFriends: FriendItem[];
-  roomName: string;
   friendPanelOpen: boolean;
   createGroupPanelOpen: boolean;
   friendSearchResult: UserProfile | null;
@@ -211,7 +215,6 @@ export default function AppShell({
   selectedContact,
   privacySettings,
   blockedFriends,
-  roomName,
   friendPanelOpen,
   createGroupPanelOpen,
   friendSearchResult,
@@ -262,6 +265,8 @@ export default function AppShell({
   onOpenSendRequestFromProfile,
   onOpenMomentsFromProfile,
 }: AppShellProps) {
+  const [searchActive, setSearchActive] = useState(false);
+
   return (
     <DesktopWindowFrame>
       <>
@@ -273,19 +278,34 @@ export default function AppShell({
           chatUnreadCount={totalUnread}
           onOpenCurrentProfile={onOpenCurrentUserProfile}
           sidebarContent={
-            activeDock === "chat" ? (
+            activeDock === "chat" && !searchActive ? (
               <ChatView.ConversationList
                 items={chatState.visibleConversations}
                 activeConversationId={chatState.activeConversationId}
                 onConversationChange={chatActions.onConversationChange}
                 onOpenAddFriend={chatActions.onOpenAddFriend}
                 onOpenCreateGroup={chatActions.onOpenCreateGroup}
+                onOpenSearch={() => setSearchActive(true)}
                 onTogglePinned={chatActions.onTogglePinned}
                 onMarkRead={chatActions.onMarkRead}
                 onToggleMuted={chatActions.onToggleMuted}
                 onDeleteConversation={chatActions.onDeleteConversation}
                 onHideConversation={chatActions.onHideConversation}
               />
+            ) : activeDock === "chat" && searchActive ? (
+              <div style={{ position: "relative", height: "100%" }}>
+                <SearchPanel
+                  conversations={chatState.visibleConversations}
+                  contacts={contactItems}
+                  aiSearchEnabled={settings.aiSearchEnabled}
+                  token={getToken()}
+                  onSelectConversation={(conversationId: string) => {
+                    chatActions.onConversationChange(conversationId);
+                    setSearchActive(false);
+                  }}
+                  onClose={() => setSearchActive(false)}
+                />
+              </div>
             ) : activeDock === "contacts" ? (
               <ContactsView.List
                 contacts={contactItems}
@@ -332,6 +352,9 @@ export default function AppShell({
                 clearAfterSend={chatState.clearAfterSend}
                 composerDisabledReason={chatState.composerDisabledReason}
                 draftContent={chatState.draftContent}
+                streamingContent={chatState.streamingContent}
+                streamingLoading={chatState.streamingLoading}
+                aiReplySuggestions={settings.aiReplySuggestions}
                 onDraftChange={chatActions.onDraftChange}
                 onSendText={chatActions.onSendText}
                 onSendImage={chatActions.onSendImage}
@@ -392,7 +415,6 @@ export default function AppShell({
                 settings={settings}
                 username={currentUser.username}
                 nickname={currentUser.nickname}
-                roomName={roomName}
                 avatar={currentUser.avatar}
                 gender={currentUser.gender}
                 region={currentUser.region}

@@ -11,11 +11,13 @@ import (
 )
 
 const (
-	MessageTypeChat   = "chat"
-	MessageTypeSystem = "system"
-	MessageTypeUsers  = "users"
-	MessageTypeError  = "error"
-	MessageTypeRevoke = "revoke"
+	MessageTypeChat         = "chat"
+	MessageTypeSystem       = "system"
+	MessageTypeUsers        = "users"
+	MessageTypeError        = "error"
+	MessageTypeRevoke       = "revoke"
+	MessageTypeAIStreamChunk = "ai-stream-chunk"
+	MessageTypeAIStreamDone  = "ai-stream-done"
 
 	ScopePrivate = "private"
 	ScopeGroup   = "group"
@@ -80,6 +82,20 @@ type ValidatedInput struct {
 	TargetName     string
 	Content        string
 	Quote          *Quote
+}
+
+type AIStreamChunk struct {
+	Type           string `json:"type"`
+	StreamID       string `json:"streamId"`
+	ConversationID string `json:"conversationId"`
+	Content        string `json:"content"`
+}
+
+type AIStreamDone struct {
+	Type           string `json:"type"`
+	StreamID       string `json:"streamId"`
+	ConversationID string `json:"conversationId"`
+	MessageID      string `json:"messageId"`
 }
 
 func NowString() string {
@@ -183,6 +199,24 @@ func NewErrorMessage(content string, onlineCount int) Message {
 		Content:        content,
 		CreatedAt:      NowString(),
 		OnlineCount:    onlineCount,
+	}
+}
+
+func NewAIStreamChunk(streamID, conversationID, content string) AIStreamChunk {
+	return AIStreamChunk{
+		Type:           MessageTypeAIStreamChunk,
+		StreamID:       streamID,
+		ConversationID: conversationID,
+		Content:        content,
+	}
+}
+
+func NewAIStreamDone(streamID, conversationID, messageID string) AIStreamDone {
+	return AIStreamDone{
+		Type:           MessageTypeAIStreamDone,
+		StreamID:       streamID,
+		ConversationID: conversationID,
+		MessageID:      messageID,
 	}
 }
 

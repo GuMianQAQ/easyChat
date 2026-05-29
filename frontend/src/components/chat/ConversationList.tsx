@@ -11,6 +11,7 @@ interface ConversationListProps {
   onConversationChange: (conversationId: string) => void;
   onOpenAddFriend: () => void;
   onOpenCreateGroup: () => void;
+  onOpenSearch: () => void;
   onTogglePinned: (conversation: Conversation, next: boolean) => void;
   onMarkRead: (conversation: Conversation) => void;
   onToggleMuted: (conversation: Conversation, next: boolean) => void;
@@ -30,6 +31,7 @@ function ConversationList({
   onConversationChange,
   onOpenAddFriend,
   onOpenCreateGroup,
+  onOpenSearch,
   onTogglePinned,
   onMarkRead,
   onToggleMuted,
@@ -161,6 +163,7 @@ function ConversationList({
             placeholder="搜索"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
+            onFocus={onOpenSearch}
           />
         </label>
         <div className="conversation-toolbar-actions">

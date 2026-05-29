@@ -680,50 +680,8 @@
   background: #22b561;
 }
 
-.settings-empty-state {
-  padding: 18px 20px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.settings-blocked-list {
+.contacts-empty-state {
+  flex: 1;
   display: grid;
-}
-
-.settings-blocked-row {
-  min-height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.settings-blocked-row:first-child {
-  border-top: none;
-}
-
-.settings-blocked-copy {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.settings-blocked-text {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.settings-blocked-text strong {
-  color: var(--text-main);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.settings-blocked-text span {
-  color: var(--text-muted);
-  font-size: 12px;
+  place-items: center;
 }
