@@ -1,0 +1,6 @@
+# easyChat WebSocket 配置
+# 环境变量可覆盖：EASYCHAT_WEBSOCKET_WRITE_TIMEOUT 等
+
+write_timeout: 10     # 写操作超时（秒）
+pong_timeout: 60      # Pong 响应超时（秒）
+max_message_mb: 2     # 最大消息体（MB）

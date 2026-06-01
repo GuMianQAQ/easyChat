@@ -1,0 +1,16 @@
+# easyChat 全局配置示例
+# 复制此文件为 config.yaml 并填入真实配置
+# 环境变量可覆盖：EASYCHAT_SERVER_ADDR, EASYCHAT_CORS_ALLOW_ORIGIN 等
+
+server:
+  # 服务器监听地址
+  addr: "127.0.0.1:8080"
+
+cors:
+  # 允许的跨域来源（生产环境请设置为具体域名）
+  # 开发环境：http://localhost:5173
+  # 生产环境：https://your-domain.com
+  allow_origin: "http://localhost:5173"
+
+  # 预检请求缓存时间（秒）
+  max_age: 3600

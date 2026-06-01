@@ -1,0 +1,5 @@
+# easyChat 文件上传配置
+# 环境变量可覆盖：EASYCHAT_UPLOAD_MAX_IMAGE_MB, EASYCHAT_UPLOAD_MAX_FILE_MB
+
+max_image_mb: 2       # 图片上传大小限制（MB）
+max_file_mb: 10       # 通用文件上传大小限制（MB）

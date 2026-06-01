@@ -1,0 +1,11 @@
+# easyChat 认证配置示例
+# 复制此文件为 auth.yaml 并填入真实配置
+# 环境变量可覆盖：EASYCHAT_AUTH_JWT_SECRET, EASYCHAT_AUTH_JWT_TTL
+
+jwt:
+  # JWT 签名密钥（必填，请使用强随机字符串）
+  # 生成方法：openssl rand -base64 32
+  secret: "your-jwt-secret-here"
+
+  # Token 有效期，单位：小时
+  ttl: 24

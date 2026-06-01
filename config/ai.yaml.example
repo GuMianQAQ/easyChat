@@ -1,0 +1,62 @@
+# easyChat AI 配置示例
+# 复制此文件为 ai.yaml 并填入真实配置
+# 环境变量可覆盖：EASYCHAT_AI_API_KEY, EASYCHAT_AI_PROVIDER 等
+
+# AI 服务商：openai / ollama / MIMO
+provider: openai
+
+# 模型名称
+model: gpt-3.5-turbo
+
+# API Key（必填）
+api_key: "your-api-key-here"
+
+# API 地址（留空使用默认值）
+# OpenAI: https://api.openai.com/v1
+# Ollama: http://localhost:11434/v1
+# MIMO: https://token-plan-sgp.xiaomimimo.com/v1
+base_url: ""
+
+# 生成参数
+temperature: 0.7
+max_tokens: 2000
+context_window: 20
+
+# 超时设置（秒）
+timeout:
+  chat: 30
+  stream: 60
+
+# 翻译功能参数
+translate:
+  temperature: 0.3
+  max_tokens: 1000
+
+# 摘要功能参数
+summarize:
+  temperature: 0.3
+  max_tokens: 500
+
+# 输入预测参数
+complete:
+  max_tokens: 3000
+
+# 问答预测参数
+predict:
+  max_tokens: 3000
+
+# 功能开关
+enable:
+  chat: true
+  stream: true
+  tools: true
+  search: true
+
+# 系统提示词（留空使用内置默认值）
+system_prompt: "你是一个友好的 AI 助手，名叫 AI 助手。请用简洁、准确的中文回答问题。"
+translate_prompt: "你是一个翻译助手。将用户提供的文本翻译成目标语言。只输出翻译结果，不要解释。"
+summarize_prompt: "你是一个摘要助手。将用户提供的多条消息总结为简洁的摘要。包含关键话题、主要结论和待办事项（如有）。"
+complete_simple_prompt: "你是一个输入预测助手。根据用户已输入的文字，预测用户接下来最可能输入的一个词（1-4个字）。直接返回预测的词，不要加任何解释或标点。"
+complete_medium_prompt: "你是一个输入预测助手。根据用户已输入的文字，预测用户接下来最可能输入的一个短语（2-8个字）。直接返回预测的短语，不要加任何解释或标点。"
+complete_complex_prompt: "你是一个输入预测助手。根据用户已输入的文字，预测用户接下来最可能输入的一句话（5-20个字）。直接返回预测的句子，不要加任何解释或标点。"
+predict_question_prompt: "你是一个问答预测助手。根据用户输入的文字，预测用户可能想问的问题，并给出简短答案。直接返回JSON格式，不要加任何其他内容。格式：{\"question\":\"问题\",\"answer\":\"答案\"}"
