@@ -21,6 +21,7 @@ import {
 } from "./chatSocketHelpers";
 import { resolveWsUrl } from "../config/env";
 
+
 interface JoinSession {
   token: string;
   user: CurrentUser;

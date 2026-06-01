@@ -93,6 +93,8 @@ export function createSocialActions(options: CreateSocialActionsOptions) {
 
   const handleAuthError = (error: unknown) => {
     if (isAuthExpiredError(error)) {
+      console.warn("[AuthDebug] 401 detected in createSocialActions, storedToken length:", storedToken?.length ?? 0);
+      console.trace("[AuthDebug] handleAuthError stack trace");
       handleAuthExpired();
       return true;
     }

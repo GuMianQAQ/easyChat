@@ -1,11 +1,11 @@
 import { File, Image, Scissors, Smile } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { CompletionGranularity, MessageQuote, PredictionScope } from "../../types/chat";
-import { resolveApiUrl } from "../../config/env";
+import { useEffect, useRef, useState } from "react";
+import type { CompletionGranularity, GroupMemberItem, MessageQuote, PredictionScope } from "../../types/chat";
 import { prepareImageDataUrl } from "../../utils/media";
 import { useInputCompletion } from "../../hooks/useInputCompletion";
 import { useQuestionPrediction } from "../../hooks/useQuestionPrediction";
 import EmojiPicker from "./EmojiPicker";
+import MentionPicker from "./MentionPicker";
 import QuotePreview from "./QuotePreview";
 
 interface MessageComposerProps {
@@ -18,7 +18,8 @@ interface MessageComposerProps {
   clearAfterSend: boolean;
   quote?: MessageQuote | null;
   isAIAssistant?: boolean;
-  aiReplySuggestions?: boolean;
+  isGroupChat?: boolean;
+  groupMembers?: GroupMemberItem[];
   inputCompletion?: boolean;
   completionGranularity?: CompletionGranularity;
   completionScope?: PredictionScope;
@@ -43,7 +44,8 @@ function MessageComposer({
   clearAfterSend,
   quote,
   isAIAssistant,
-  aiReplySuggestions,
+  isGroupChat,
+  groupMembers = [],
   inputCompletion,
   completionGranularity = "simple",
   completionScope = "all",
@@ -58,11 +60,10 @@ function MessageComposer({
   onNotice,
 }: MessageComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [suggestion, setSuggestion] = useState("");
+  const [mentionKeyword, setMentionKeyword] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const selectionRef = useRef({ start: 0, end: 0 });
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { completion, dismissCompletion } = useInputCompletion({
     content,
@@ -132,56 +133,8 @@ function MessageComposer({
     }
   };
 
-  const fetchSuggestion = useCallback(async () => {
-    if (!isAIAssistant || !aiReplySuggestions || !token || !content.trim()) {
-      setSuggestion("");
-      return;
-    }
-
-    try {
-      const resp = await fetch(resolveApiUrl("/api/ai/generate-replies"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: content }),
-      });
-      const data = await resp.json();
-      if (resp.ok && data.replies && data.replies.length > 0) {
-        setSuggestion(data.replies[0]);
-      } else {
-        setSuggestion("");
-      }
-    } catch {
-      setSuggestion("");
-    }
-  }, [isAIAssistant, aiReplySuggestions, token, content]);
-
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    if (!isAIAssistant || !aiReplySuggestions || !content.trim()) {
-      setSuggestion("");
-      return;
-    }
-
-    debounceRef.current = setTimeout(() => {
-      void fetchSuggestion();
-    }, 500);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [content, isAIAssistant, aiReplySuggestions, fetchSuggestion]);
-
   useEffect(() => {
     setEmojiOpen(false);
-    setSuggestion("");
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -245,6 +198,29 @@ function MessageComposer({
       </div>
 
       <div className="composer-input-wrap">
+        {isGroupChat && mentionKeyword !== null && groupMembers.length > 0 ? (
+          <MentionPicker
+            members={groupMembers}
+            keyword={mentionKeyword}
+            onSelect={(member) => {
+              const textarea = textareaRef.current;
+              const { start } = selectionRef.current;
+              const beforeCursor = content.slice(0, start);
+              const atIndex = beforeCursor.lastIndexOf("@");
+              if (atIndex >= 0) {
+                const newContent = content.slice(0, atIndex) + `@${member.userId} ` + content.slice(start);
+                onContentChange(newContent);
+                requestAnimationFrame(() => {
+                  const cursor = atIndex + member.userId.length + 2;
+                  textarea?.setSelectionRange(cursor, cursor);
+                  textarea?.focus();
+                });
+              }
+              setMentionKeyword(null);
+            }}
+            onClose={() => setMentionKeyword(null)}
+          />
+        ) : null}
         <textarea
           ref={textareaRef}
           className="composer-input"
@@ -253,8 +229,25 @@ function MessageComposer({
           disabled={disabled}
           placeholder={disabled ? disabledReason || "连接后才能发送消息" : placeholderText}
           onChange={(event) => {
-            onContentChange(event.target.value);
+            const newValue = event.target.value;
+            onContentChange(newValue);
             syncSelection();
+            // Detect @ trigger for group chats
+            if (isGroupChat) {
+              const cursor = event.target.selectionStart ?? newValue.length;
+              const beforeCursor = newValue.slice(0, cursor);
+              const atIndex = beforeCursor.lastIndexOf("@");
+              if (atIndex >= 0) {
+                const afterAt = beforeCursor.slice(atIndex + 1);
+                if (!afterAt.includes(" ") && afterAt.length <= 20) {
+                  setMentionKeyword(afterAt);
+                } else {
+                  setMentionKeyword(null);
+                }
+              } else {
+                setMentionKeyword(null);
+              }
+            }
           }}
           onSelect={syncSelection}
           onKeyUp={syncSelection}
@@ -287,13 +280,6 @@ function MessageComposer({
             } else if (event.key === "Escape" && completion) {
               event.preventDefault();
               dismissCompletion();
-            } else if (event.key === "Tab" && suggestion) {
-              event.preventDefault();
-              onContentChange(suggestion);
-              setSuggestion("");
-            } else if (event.key === "Escape" && suggestion) {
-              event.preventDefault();
-              setSuggestion("");
             } else if (enterToSend && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               submit();
@@ -328,13 +314,6 @@ function MessageComposer({
             <span className="question-prediction-question">{question}</span>
             <span className="question-prediction-answer">→ {answer}</span>
           </div>
-        </div>
-      ) : null}
-
-      {suggestion && isAIAssistant && aiReplySuggestions ? (
-        <div className="ai-suggestions">
-          <span className="ai-suggestion-text">{suggestion}</span>
-          <span className="ai-suggestion-hint">按 Tab 补全</span>
         </div>
       ) : null}
 

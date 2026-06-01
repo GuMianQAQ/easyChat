@@ -10,7 +10,6 @@ import FilesView from "../files/FilesView";
 import MainLayout from "../layout/MainLayout";
 import SettingsView from "../settings/SettingsView";
 import DesktopWindowFrame from "./DesktopWindowFrame";
-import { getToken } from "../../utils/auth";
 import type {
   ChatMessage,
   ConnectionStatus,
@@ -66,6 +65,7 @@ interface ChatShellState {
   draftContent: string;
   streamingContent?: string;
   streamingLoading?: boolean;
+  currentUserId: string;
 }
 
 interface ChatShellActions {
@@ -115,6 +115,7 @@ interface AppShellProps {
   onDockChange: (dock: DockView) => void;
   currentUser: CurrentUser;
   totalUnread: number;
+  token: string;
   chatState: ChatShellState;
   chatActions: ChatShellActions;
   contactItems: ContactItem[];
@@ -196,6 +197,7 @@ export default function AppShell({
   onDockChange,
   currentUser,
   totalUnread,
+  token,
   chatState,
   chatActions,
   contactItems,
@@ -298,7 +300,7 @@ export default function AppShell({
                   conversations={chatState.visibleConversations}
                   contacts={contactItems}
                   aiSearchEnabled={settings.aiSearchEnabled}
-                  token={getToken()}
+                  token={token}
                   onSelectConversation={(conversationId: string) => {
                     chatActions.onConversationChange(conversationId);
                     setSearchActive(false);
@@ -339,6 +341,8 @@ export default function AppShell({
           mainContent={
             activeDock === "chat" ? (
               <ChatView.Main
+                token={token}
+                currentUserId={chatState.currentUserId}
                 activeConversation={chatState.visibleActiveConversation}
                 status={chatState.status}
                 messages={chatState.activeMessages}
@@ -354,7 +358,11 @@ export default function AppShell({
                 draftContent={chatState.draftContent}
                 streamingContent={chatState.streamingContent}
                 streamingLoading={chatState.streamingLoading}
-                aiReplySuggestions={settings.aiReplySuggestions}
+                inputCompletion={settings.inputCompletion}
+                completionGranularity={settings.completionGranularity}
+                completionScope={settings.completionScope}
+                questionPrediction={settings.questionPrediction}
+                questionPredictionScope={settings.questionPredictionScope}
                 onDraftChange={chatActions.onDraftChange}
                 onSendText={chatActions.onSendText}
                 onSendImage={chatActions.onSendImage}

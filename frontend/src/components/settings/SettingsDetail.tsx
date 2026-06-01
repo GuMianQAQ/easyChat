@@ -120,7 +120,7 @@ export default function SettingsDetail({
   };
 
   const updateBoolean = (
-    key: "rememberProfile" | "clearAfterSend" | "enterToSend" | "aiReplySuggestions" | "aiSearchEnabled" | "inputCompletion" | "questionPrediction",
+    key: "rememberProfile" | "clearAfterSend" | "enterToSend" | "aiSearchEnabled" | "inputCompletion" | "questionPrediction",
     value: boolean,
   ) => {
     onSettingsChange((previous) => ({ ...previous, [key]: value }));
@@ -579,17 +579,6 @@ export default function SettingsDetail({
         </SettingsSection>
 
         <SettingsSection id="settings-ai" title="AI 功能">
-          <SettingsRow
-            label="智能回复建议"
-            description="在 AI 助手会话中自动显示回复建议"
-            control={
-              <Switch
-                checked={settings.aiReplySuggestions}
-                onChange={(value) => updateBoolean("aiReplySuggestions", value)}
-                label="智能回复建议"
-              />
-            }
-          />
           <SettingsRow
             label="输入补全"
             description="预测用户接下来要输入的内容，按 Tab 补全。关闭后不会调用 AI，节省 token"

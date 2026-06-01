@@ -10,17 +10,25 @@ import type {
   NotificationItem,
 } from "../../types/chat";
 import { resolveApiUrl } from "../../config/env";
-import { getToken } from "../../utils/auth";
 import { prepareImageDataUrl } from "../../utils/media";
 import EmptyState from "../common/EmptyState";
+import AnnouncementBar from "./AnnouncementBar";
 import ChatHeader from "./ChatHeader";
 import ConversationDetailPanel from "./ConversationDetailPanel";
 import ConversationList from "./ConversationList";
+import GroupFeatureModal from "./GroupFeatureModal";
 import ImagePreviewModal from "./ImagePreviewModal";
 import MessageComposer from "./MessageComposer";
 import MessageList from "./MessageList";
+import PinnedMessages from "./PinnedMessages";
+import GroupFileManager from "./GroupFileManager";
+import GroupAlbum from "./GroupAlbum";
+import VoteModal from "./VoteModal";
+import SolitaireModal from "./SolitaireModal";
 
 interface ChatMainProps {
+  token: string;
+  currentUserId: string;
   activeConversation: Conversation;
   status: ConnectionStatus;
   messages: ChatMessage[];
@@ -36,7 +44,11 @@ interface ChatMainProps {
   draftContent: string;
   streamingContent?: string;
   streamingLoading?: boolean;
-  aiReplySuggestions?: boolean;
+  inputCompletion?: boolean;
+  completionGranularity?: "simple" | "medium" | "complex";
+  completionScope?: "all" | "ai" | "normal";
+  questionPrediction?: boolean;
+  questionPredictionScope?: "all" | "ai" | "normal";
   onDraftChange: (value: string) => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
@@ -101,6 +113,8 @@ function NotificationPanel({ notifications }: { notifications: NotificationItem[
 }
 
 function ChatMain({
+  token,
+  currentUserId,
   activeConversation,
   status,
   messages,
@@ -116,7 +130,11 @@ function ChatMain({
   draftContent,
   streamingContent,
   streamingLoading,
-  aiReplySuggestions,
+  inputCompletion,
+  completionGranularity,
+  completionScope,
+  questionPrediction,
+  questionPredictionScope,
   onDraftChange,
   onSendText,
   onSendImage,
@@ -146,13 +164,13 @@ function ChatMain({
   const [menuOpen, setMenuOpen] = useState(false);
   const [jumpToMessageId, setJumpToMessageId] = useState("");
   const [translation, setTranslation] = useState<{ text: string; result: string } | null>(null);
+  const [activeFeature, setActiveFeature] = useState<string | null>(null);
   const isAIAssistant = activeConversation.type === "private" && activeConversation.targetUserId === "ai-assistant";
   const composerPlaceholder = isAIAssistant ? "直接向 AI 助手提问" : "输入消息";
 
   const handleTranslate = async (message: ChatMessage) => {
     setTranslation({ text: message.content, result: "翻译中..." });
     try {
-      const token = getToken();
       const resp = await fetch(resolveApiUrl("/api/ai/translate"), {
         method: "POST",
         headers: {
@@ -262,13 +280,18 @@ function ChatMain({
           conversation={activeConversation}
           menuOpen={menuOpen}
           onToggleMenu={() => setMenuOpen((open) => !open)}
+          onOpenFeature={setActiveFeature}
         />
+        {activeConversation.type === "group" && activeConversation.announcement && (
+          <AnnouncementBar announcement={activeConversation.announcement} />
+        )}
         <MessageList
           messages={messages}
           hasMore={hasMore}
           loadingMore={loadingMore}
           favoriteIds={favoriteIds}
           jumpToMessageId={jumpToMessageId}
+          groupMembers={groupConversation?.members || []}
           onJumpHandled={() => {
             setJumpToMessageId("");
             onJumpHandled?.();
@@ -293,6 +316,16 @@ function ChatMain({
           onRevoke={onRevoke}
           onRetry={onRetry}
           onTranslate={handleTranslate}
+          isGroupChat={activeConversation.type === "group"}
+          onPinMessage={activeConversation.type === "group" ? async (message) => {
+            try {
+              const { pinMessage } = await import("../../utils/chatApi");
+              await pinMessage(token, activeConversation.id, message.id);
+              onNotice("精华消息", "已设为精华", "success");
+            } catch (error) {
+              onNotice("精华消息", error instanceof Error ? error.message : "操作失败", "error");
+            }
+          } : undefined}
           streamingContent={streamingContent}
           streamingLoading={streamingLoading}
         />
@@ -316,8 +349,14 @@ function ChatMain({
           clearAfterSend={clearAfterSend}
           quote={quote}
           isAIAssistant={isAIAssistant}
-          aiReplySuggestions={aiReplySuggestions}
-          token={getToken()}
+          isGroupChat={activeConversation.type === "group"}
+          groupMembers={groupConversation?.members || []}
+          inputCompletion={inputCompletion}
+          completionGranularity={completionGranularity}
+          completionScope={completionScope}
+          questionPrediction={questionPrediction}
+          questionPredictionScope={questionPredictionScope}
+          token={token}
           onClearQuote={() => setQuote(null)}
           onContentChange={onDraftChange}
           onSendText={onSendText}
@@ -332,6 +371,7 @@ function ChatMain({
         aria-hidden={!menuOpen}
       >
         <ConversationDetailPanel
+          token={token}
           conversation={activeConversation}
           messages={messages}
           groupConversation={groupConversation}
@@ -344,11 +384,35 @@ function ChatMain({
           onUploadImage={onUploadImage}
           onUpdateGroupConversation={onUpdateGroupConversation}
           onUpdateGroupBotEnabled={onUpdateGroupBotEnabled}
+          onNotice={onNotice}
+          onPreviewImage={(url) => setPreviewImage(url)}
         />
       </div>
 
       <ImagePreviewModal open={Boolean(previewImage)} src={previewImage} onClose={() => setPreviewImage("")} />
       {dragging ? <div className="drag-overlay">释放发送图片</div> : null}
+
+      {activeFeature === "pinned" && activeConversation.type === "group" && (
+        <GroupFeatureModal title={`群精华 - ${activeConversation.title}`} onClose={() => setActiveFeature(null)}>
+          <PinnedMessages token={token} conversationId={activeConversation.id} myRole={groupConversation?.myRole || "member"} onJumpToMessage={setJumpToMessageId} onNotice={onNotice} />
+        </GroupFeatureModal>
+      )}
+      {activeFeature === "files" && activeConversation.type === "group" && (
+        <GroupFeatureModal title={`群文件 - ${activeConversation.title}`} onClose={() => setActiveFeature(null)}>
+          <GroupFileManager token={token} conversationId={activeConversation.id} onNotice={onNotice} />
+        </GroupFeatureModal>
+      )}
+      {activeFeature === "album" && activeConversation.type === "group" && (
+        <GroupFeatureModal title={`群相册 - ${activeConversation.title}`} onClose={() => setActiveFeature(null)}>
+          <GroupAlbum token={token} conversationId={activeConversation.id} onNotice={onNotice} onPreviewImage={(url) => setPreviewImage(url)} />
+        </GroupFeatureModal>
+      )}
+      {activeFeature === "vote" && activeConversation.type === "group" && (
+        <VoteModal token={token} conversationId={activeConversation.id} conversationName={activeConversation.title} myRole={groupConversation?.myRole || "member"} onClose={() => setActiveFeature(null)} onNotice={onNotice} />
+      )}
+      {activeFeature === "solitaire" && activeConversation.type === "group" && (
+        <SolitaireModal token={token} conversationId={activeConversation.id} conversationName={activeConversation.title} currentUserId={currentUserId} onClose={() => setActiveFeature(null)} onNotice={onNotice} />
+      )}
     </div>
   );
 }

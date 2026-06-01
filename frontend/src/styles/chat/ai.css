@@ -202,33 +202,6 @@
   margin-top: 2px;
 }
 
-/* 智能回复建议样式 */
-
-.ai-suggestions {
-  padding: 4px 8px;
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-suggestion-text {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-  opacity: 0.7;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ai-suggestion-hint {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  opacity: 0.5;
-  white-space: nowrap;
-}
-
 /* Ghost overlay 样式 */
 
 .ghost-overlay {
@@ -241,7 +214,7 @@
   z-index: 2;
   padding: 8px 12px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.7;
   color: var(--color-text-tertiary);
   opacity: 0.5;
   overflow: hidden;

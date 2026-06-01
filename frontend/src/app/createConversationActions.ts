@@ -129,6 +129,8 @@ export function createConversationActions({
     localDataActions;
   const handleAuthError = (error: unknown) => {
     if (isAuthExpiredError(error)) {
+      console.warn("[AuthDebug] 401 detected in createConversationActions, storedToken length:", storedToken?.length ?? 0);
+      console.trace("[AuthDebug] handleAuthError stack trace");
       handleAuthExpired();
       return true;
     }

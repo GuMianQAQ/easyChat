@@ -375,6 +375,8 @@
   background: transparent;
   color: var(--text-primary);
   line-height: 1.7;
+  padding: 8px 12px;
+  font-size: 14px;
 }
 
 .composer-input::placeholder {

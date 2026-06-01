@@ -915,6 +915,7 @@ function App() {
         onDockChange={setActiveDock}
         currentUser={currentUser}
         totalUnread={totalUnread}
+        token={storedToken}
         chatState={{
           visibleConversations: visibleConversationsWithDrafts,
           activeConversationId,
@@ -933,6 +934,7 @@ function App() {
           draftContent: currentConversationDraft,
           streamingContent: streamingState?.conversationId === activeConversationId ? streamingState.content : undefined,
           streamingLoading: streamingState?.conversationId === activeConversationId ? streamingState.loading : undefined,
+          currentUserId,
         }}
         chatActions={{
           onConversationChange: openConversation,

@@ -3,6 +3,7 @@ import {
   Expand,
   Languages,
   MessageCircleMore,
+  Pin,
   Quote,
   RotateCcw,
   Star,
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { ChatMessage } from "../../types/chat";
+import type { ChatMessage, GroupMemberItem } from "../../types/chat";
 import { formatDividerTime, shouldShowTimeDivider } from "../../utils/time";
 import EmptyState from "../common/EmptyState";
 import MessageContextMenu, { type ContextMenuAction } from "./MessageContextMenu";
@@ -22,6 +23,8 @@ interface MessageListProps {
   loadingMore: boolean;
   favoriteIds: Set<string>;
   jumpToMessageId?: string;
+  groupMembers?: GroupMemberItem[];
+  isGroupChat?: boolean;
   onJumpHandled?: () => void;
   onJumpMissing?: () => void;
   onLoadMore: () => void;
@@ -34,6 +37,7 @@ interface MessageListProps {
   onRevoke: (message: ChatMessage) => void;
   onRetry: (messageId: string) => void;
   onTranslate?: (message: ChatMessage) => void;
+  onPinMessage?: (message: ChatMessage) => void;
   streamingContent?: string;
   streamingLoading?: boolean;
 }
@@ -70,6 +74,8 @@ function MessageList({
   loadingMore,
   favoriteIds,
   jumpToMessageId,
+  groupMembers = [],
+  isGroupChat = false,
   onJumpHandled,
   onJumpMissing,
   onLoadMore,
@@ -82,6 +88,7 @@ function MessageList({
   onRevoke,
   onRetry,
   onTranslate,
+  onPinMessage,
   streamingContent,
   streamingLoading,
 }: MessageListProps) {
@@ -223,6 +230,18 @@ function MessageList({
       });
     }
 
+    if (!message.revoked && isGroupChat && onPinMessage) {
+      actions.push({
+        key: "pin",
+        label: "设为精华",
+        icon: <Pin size={14} />,
+        onClick: () => {
+          onPinMessage(message);
+          setContextMenu(null);
+        },
+      });
+    }
+
     actions.push({
       key: "delete",
       label: "删除本地记录",
@@ -307,6 +326,7 @@ function MessageList({
                 message={message}
                 favorite={favoriteIds.has(message.id)}
                 highlighted={highlightedId === message.id}
+                groupMembers={groupMembers}
                 onContextMenu={(nextMessage, event) => {
                   if (window.getSelection()?.toString()) {
                     return;

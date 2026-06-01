@@ -130,31 +130,6 @@ export interface ConversationPayload {
   targetName?: string;
 }
 
-export interface GroupMemberItem {
-  userId: string;
-  username: string;
-  nickname: string;
-  avatar: string;
-  role: "owner" | "member";
-  groupNickname: string;
-}
-
-export interface GroupConversationPayload {
-  id: string;
-  type: "group";
-  name: string;
-  avatar: string;
-  announcement: string;
-  remark: string;
-  myNickname: string;
-  myRole: "owner" | "member";
-  canEditGroupProfile: boolean;
-  botEnabled: boolean;
-  isMuted: boolean;
-  memberCount: number;
-  members: GroupMemberItem[];
-}
-
 export interface MessagePagePayload {
   items: ServerMessage[];
   page: number;
@@ -370,11 +345,115 @@ export interface UserSettings {
   rememberProfile: boolean;
   clearAfterSend: boolean;
   enterToSend: boolean;
-  aiReplySuggestions: boolean;
   aiSearchEnabled: boolean;
   inputCompletion: boolean;
   completionGranularity: CompletionGranularity;
   completionScope: PredictionScope;
   questionPrediction: boolean;
   questionPredictionScope: PredictionScope;
+}
+
+// Group chat enhancement types
+
+export interface GroupMemberItem {
+  userId: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+  role: "owner" | "admin" | "member";
+  groupNickname: string;
+  mutedUntil?: string | null;
+}
+
+export interface GroupConversationPayload {
+  id: string;
+  type: "group";
+  name: string;
+  avatar: string;
+  announcement: string;
+  remark: string;
+  myNickname: string;
+  myRole: "owner" | "admin" | "member";
+  canEditGroupProfile: boolean;
+  botEnabled: boolean;
+  isMuted: boolean;
+  memberCount: number;
+  members: GroupMemberItem[];
+}
+
+export interface PinnedMessage {
+  id: string;
+  conversationId: string;
+  messageType: ChatMessageType;
+  senderId: string;
+  senderName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface GroupFileItem {
+  id: string;
+  senderId: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+}
+
+export interface GroupInviteLink {
+  id: string;
+  conversationId: string;
+  code: string;
+  createdBy: string;
+  maxUses: number;
+  useCount: number;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+export interface VoteOption {
+  id: string;
+  optionText: string;
+  sortOrder: number;
+  voteCount: number;
+}
+
+export interface Vote {
+  id: string;
+  conversationId: string;
+  creatorId: string;
+  question: string;
+  allowMulti: boolean;
+  anonymous: boolean;
+  deadline?: string | null;
+  createdAt: string;
+  options: VoteOption[];
+  totalVotes: number;
+}
+
+export interface SolitaireItem {
+  id: string;
+  userId: string;
+  content: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface Solitaire {
+  id: string;
+  conversationId: string;
+  creatorId: string;
+  title: string;
+  createdAt: string;
+  items: SolitaireItem[];
+}
+
+export interface GroupPermissions {
+  who_can_change_name: "admin" | "all";
+  who_can_change_avatar: "admin" | "all";
+  who_can_change_announcement: "admin" | "all";
+  who_can_create_vote: "admin" | "all";
+  who_can_create_solitaire: "admin" | "all";
+  mute_all: boolean;
 }

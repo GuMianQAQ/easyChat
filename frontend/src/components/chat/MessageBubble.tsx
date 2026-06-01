@@ -1,7 +1,8 @@
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
-import type { ChatMessage } from "../../types/chat";
+import type { ChatMessage, GroupMemberItem } from "../../types/chat";
 import { formatTimeLabel } from "../../utils/time";
+import { segmentsForDisplay } from "../../utils/mentions";
 import Avatar from "../common/Avatar";
 
 function summarizeQuote(message: ChatMessage) {
@@ -23,6 +24,7 @@ interface MessageBubbleProps {
   message: ChatMessage;
   favorite: boolean;
   highlighted: boolean;
+  groupMembers?: GroupMemberItem[];
   onContextMenu: (message: ChatMessage, event: MouseEvent<HTMLElement>) => void;
   onOpenProfile: (message: ChatMessage, event: MouseEvent<HTMLElement>) => void;
   onPreviewImage: (message: ChatMessage) => void;
@@ -34,12 +36,44 @@ function MessageBubble({
   message,
   favorite,
   highlighted,
+  groupMembers = [],
   onContextMenu,
   onOpenProfile,
   onPreviewImage,
   onJumpToQuote,
   onRetry,
 }: MessageBubbleProps) {
+  const renderContent = (): ReactNode => {
+    if (message.messageType === "image" && !message.revoked) {
+      return (
+        <button type="button" className="message-image-button" onClick={() => onPreviewImage(message)}>
+          <img className="message-image" src={message.content} alt="图片消息" />
+        </button>
+      );
+    }
+
+    if (message.revoked) {
+      return <div className="message-content message-content-revoked">{message.content}</div>;
+    }
+
+    if (groupMembers.length > 0) {
+      const segments = segmentsForDisplay(message.content, groupMembers);
+      return (
+        <div className="message-content">
+          {segments.map((seg, i) =>
+            seg.isMention ? (
+              <span key={i} className="mention-highlight">{seg.text}</span>
+            ) : (
+              <span key={i}>{seg.text}</span>
+            ),
+          )}
+        </div>
+      );
+    }
+
+    return <div className="message-content">{message.content}</div>;
+  };
+
   return (
     <div
       className={`message-row ${message.isSelf ? "message-row-self" : ""} ${
@@ -86,19 +120,7 @@ function MessageBubble({
               </button>
             ) : null}
 
-            {message.messageType === "image" && !message.revoked ? (
-              <button
-                type="button"
-                className="message-image-button"
-                onClick={() => onPreviewImage(message)}
-              >
-                <img className="message-image" src={message.content} alt="图片消息" />
-              </button>
-            ) : (
-              <div className={`message-content ${message.revoked ? "message-content-revoked" : ""}`}>
-                {message.content}
-              </div>
-            )}
+            {renderContent()}
           </article>
 
           {favorite ? <span className="message-favorite-dot" /> : null}
