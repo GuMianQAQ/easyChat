@@ -17,7 +17,6 @@ func (s *Server) registerAIRoutes(api *gin.RouterGroup) {
 	ai.POST("/chat", s.handleAIChat)
 	ai.POST("/translate", s.handleAITranslate)
 	ai.POST("/summarize", s.handleAISummarize)
-	ai.POST("/generate-replies", s.handleAIGenerateReplies)
 	ai.POST("/complete", s.handleAIComplete)
 	ai.POST("/predict-question", s.handleAIPredictQuestion)
 	ai.GET("/search", s.handleAISearch)
@@ -145,28 +144,6 @@ func (s *Server) handleAISummarize(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"summary": result})
-}
-
-func (s *Server) handleAIGenerateReplies(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	var req struct {
-		Message string `json:"message"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
-		return
-	}
-
-	replies, err := s.AI.GenerateReplies(c.Request.Context(), req.Message)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"replies": replies})
 }
 
 func (s *Server) handleAIComplete(c *gin.Context) {

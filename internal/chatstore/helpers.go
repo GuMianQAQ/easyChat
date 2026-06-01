@@ -1,14 +1,13 @@
 package chatstore
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"easyChat/internal/auth"
+	"easyChat/internal/uid"
 )
 
 func (s *Service) lookupUser(userID string) (auth.User, error) {
@@ -32,15 +31,9 @@ func formatTime(value time.Time) string {
 func normalizeID(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return newID("msg")
+		return uid.New("msg")
 	}
 	return id
 }
 
-func newID(prefix string) string {
-	var bytes [16]byte
-	if _, err := rand.Read(bytes[:]); err == nil {
-		return prefix + "-" + hex.EncodeToString(bytes[:])
-	}
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
-}
+

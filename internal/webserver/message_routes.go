@@ -1,6 +1,7 @@
 package webserver
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,8 +11,11 @@ import (
 
 func (s *Server) registerMessageRoutes(api *gin.RouterGroup) {
 	api.GET("/messages", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
+		token := bearerToken(c)
+		log.Printf("[AuthDebug] /api/messages token length: %d, header: %s", len(token), c.GetHeader("Authorization"))
+		user, err := s.Auth.UserFromToken(token)
 		if err != nil {
+			log.Printf("[AuthDebug] /api/messages auth failed: %v", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}

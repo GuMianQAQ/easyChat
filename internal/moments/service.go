@@ -1,16 +1,14 @@
 package moments
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"easyChat/internal/auth"
 	"easyChat/internal/social"
+	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
 )
@@ -44,7 +42,7 @@ func (s *Service) CreatePost(userID string, input CreateMomentInput) (MomentItem
 	}
 
 	post := Moment{
-		ID:       newID("mom"),
+		ID:       uid.New("mom"),
 		AuthorID: userID,
 		Content:  content,
 		Images:   string(imagesJSON),
@@ -155,7 +153,7 @@ func (s *Service) LikePost(userID, momentID string) error {
 	}
 
 	like := MomentLike{
-		ID:       newID("mlk"),
+		ID:       uid.New("mlk"),
 		MomentID: momentID,
 		UserID:   userID,
 	}
@@ -184,7 +182,7 @@ func (s *Service) AddComment(userID, momentID string, input AddCommentInput) (Co
 	}
 
 	comment := MomentComment{
-		ID:       newID("mcm"),
+		ID:       uid.New("mcm"),
 		MomentID: momentID,
 		AuthorID: userID,
 		Content:  content,
@@ -430,10 +428,4 @@ func decodeImages(raw string) ([]string, error) {
 	return images, nil
 }
 
-func newID(prefix string) string {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
-	}
-	return fmt.Sprintf("%s-%x", prefix, buf)
-}
+

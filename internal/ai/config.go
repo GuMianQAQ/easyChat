@@ -1,154 +1,82 @@
 package ai
 
-import (
-	"bufio"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
+// 内置默认系统提示词，YAML 中留空时使用。
+const (
+	DefaultSystemPrompt          = "你是一个友好的 AI 助手，名叫 AI 助手。请用简洁、准确的中文回答问题。"
+	DefaultTranslatePrompt       = "你是一个翻译助手。将用户提供的文本翻译成目标语言。只输出翻译结果，不要解释。"
+	DefaultSummarizePrompt       = "你是一个摘要助手。将用户提供的多条消息总结为简洁的摘要。包含关键话题、主要结论和待办事项（如有）。"
+	DefaultCompleteSimplePrompt  = "你是一个输入预测助手。根据用户已输入的文字，预测用户接下来最可能输入的一个词（1-4个字）。直接返回预测的词，不要加任何解释或标点。"
+	DefaultCompleteMediumPrompt  = "你是一个输入预测助手。根据用户已输入的文字，预测用户接下来最可能输入的一个短语（2-8个字）。直接返回预测的短语，不要加任何解释或标点。"
+	DefaultCompleteComplexPrompt = "你是一个输入预测助手。根据用户已输入的文字，预测用户接下来最可能输入的一句话（5-20个字）。直接返回预测的句子，不要加任何解释或标点。"
+	DefaultPredictQuestionPrompt = "你是一个问答预测助手。根据用户输入的文字，预测用户可能想问的问题，并给出简短答案。直接返回JSON格式，不要加任何其他内容。格式：{\"question\":\"问题\",\"answer\":\"答案\"}"
 )
 
+// TimeoutConfig 超时配置。
+type TimeoutConfig struct {
+	Chat   int `mapstructure:"chat"`
+	Stream int `mapstructure:"stream"`
+}
+
+// TranslateConfig 翻译工具配置。
+type TranslateConfig struct {
+	Temperature float64 `mapstructure:"temperature"`
+	MaxTokens   int     `mapstructure:"max_tokens"`
+}
+
+// SummarizeConfig 摘要工具配置。
+type SummarizeConfig struct {
+	Temperature float64 `mapstructure:"temperature"`
+	MaxTokens   int     `mapstructure:"max_tokens"`
+}
+
+// CompleteConfig 输入补全配置。
+type CompleteConfig struct {
+	MaxTokens int `mapstructure:"max_tokens"`
+}
+
+// PredictConfig 问题预测配置。
+type PredictConfig struct {
+	MaxTokens int `mapstructure:"max_tokens"`
+}
+
+// EnableConfig 功能开关配置。
+type EnableConfig struct {
+	Chat   bool `mapstructure:"chat"`
+	Stream bool `mapstructure:"stream"`
+	Tools  bool `mapstructure:"tools"`
+	Search bool `mapstructure:"search"`
+}
+
+// Config AI 模块配置。
 type Config struct {
-	Provider      string  `json:"provider"`
-	APIKey        string  `json:"-"`
-	Model         string  `json:"model"`
-	BaseURL       string  `json:"base_url"`
-	Temperature   float64 `json:"temperature"`
-	MaxTokens     int     `json:"max_tokens"`
-	ContextWindow int     `json:"context_window"`
-	EnableChat    bool    `json:"enable_chat"`
-	EnableStream  bool    `json:"enable_stream"`
-	EnableTools   bool    `json:"enable_tools"`
-	EnableSearch  bool    `json:"enable_search"`
+	Provider      string          `mapstructure:"provider"`
+	APIKey        string          `mapstructure:"api_key"`
+	Model         string          `mapstructure:"model"`
+	BaseURL       string          `mapstructure:"base_url"`
+	Temperature   float64         `mapstructure:"temperature"`
+	MaxTokens     int             `mapstructure:"max_tokens"`
+	ContextWindow int             `mapstructure:"context_window"`
+	Timeout       TimeoutConfig   `mapstructure:"timeout"`
+	Translate     TranslateConfig `mapstructure:"translate"`
+	Summarize     SummarizeConfig `mapstructure:"summarize"`
+	Complete      CompleteConfig  `mapstructure:"complete"`
+	Predict       PredictConfig   `mapstructure:"predict"`
+	Enable        EnableConfig    `mapstructure:"enable"`
+
+	// 系统提示词
+	SystemPrompt          string `mapstructure:"system_prompt"`
+	TranslatePrompt       string `mapstructure:"translate_prompt"`
+	SummarizePrompt       string `mapstructure:"summarize_prompt"`
+	CompleteSimplePrompt  string `mapstructure:"complete_simple_prompt"`
+	CompleteMediumPrompt  string `mapstructure:"complete_medium_prompt"`
+	CompleteComplexPrompt string `mapstructure:"complete_complex_prompt"`
+	PredictQuestionPrompt string `mapstructure:"predict_question_prompt"`
 }
 
-func DefaultConfig() Config {
-	return Config{
-		Provider:      "openai",
-		Model:         "gpt-3.5-turbo",
-		BaseURL:       "",
-		Temperature:   0.7,
-		MaxTokens:     2000,
-		ContextWindow: 20,
-		EnableChat:    true,
-		EnableStream:  true,
-		EnableTools:   true,
-		EnableSearch:  true,
-	}
-}
-
-func LoadConfig() Config {
-	loadDotEnv()
-
-	cfg := DefaultConfig()
-
-	if v := os.Getenv("EASYCHAT_AI_PROVIDER"); v != "" {
-		cfg.Provider = v
-	}
-	if v := os.Getenv("EASYCHAT_AI_API_KEY"); v != "" {
-		cfg.APIKey = v
-	}
-	if v := os.Getenv("EASYCHAT_AI_MODEL"); v != "" {
-		cfg.Model = v
-	}
-	if v := os.Getenv("EASYCHAT_AI_BASE_URL"); v != "" {
-		cfg.BaseURL = v
-	}
-	if v := os.Getenv("EASYCHAT_AI_ENABLE_CHAT"); v == "false" {
-		cfg.EnableChat = false
-	}
-	if v := os.Getenv("EASYCHAT_AI_ENABLE_STREAM"); v == "false" {
-		cfg.EnableStream = false
-	}
-	if v := os.Getenv("EASYCHAT_AI_ENABLE_TOOLS"); v == "false" {
-		cfg.EnableTools = false
-	}
-	if v := os.Getenv("EASYCHAT_AI_ENABLE_SEARCH"); v == "false" {
-		cfg.EnableSearch = false
-	}
-
-	keyStatus := "未设置"
-	if cfg.APIKey != "" {
-		keyStatus = "已设置 (***" + cfg.APIKey[len(cfg.APIKey)-4:] + ")"
-	}
-	log.Printf("AI config loaded: provider=%s, model=%s, baseURL=%q, apiKey=%s, chat=%v, stream=%v, tools=%v, search=%v",
-		cfg.Provider, cfg.Model, cfg.BaseURL, keyStatus, cfg.EnableChat, cfg.EnableStream, cfg.EnableTools, cfg.EnableSearch)
-
-	return cfg
-}
-
+// NewProvider 根据配置创建 AI Provider。
 func NewProvider(cfg Config) Provider {
-	switch cfg.Provider {
-	case "ollama":
-		if cfg.BaseURL == "" {
-			cfg.BaseURL = "http://localhost:11434/v1"
-		}
-		return NewOpenAIProvider(cfg.APIKey, cfg.Model, cfg.BaseURL)
-	default:
-		return NewOpenAIProvider(cfg.APIKey, cfg.Model, cfg.BaseURL)
+	if cfg.Provider == "ollama" && cfg.BaseURL == "" {
+		cfg.BaseURL = "http://localhost:11434/v1"
 	}
-}
-
-func loadDotEnv() {
-	// 优先从当前工作目录找，再从可执行文件目录找
-	paths := []string{".env"}
-
-	if dir, err := os.Getwd(); err == nil {
-		p := filepath.Join(dir, ".env")
-		if p != ".env" {
-			paths = append(paths, p)
-		}
-	}
-
-	// 从可执行文件所在目录找
-	if exe, err := os.Executable(); err == nil {
-		paths = append(paths, filepath.Join(filepath.Dir(exe), ".env"))
-	}
-
-	loaded := false
-	for _, p := range paths {
-		if loaded {
-			break
-		}
-
-		func() {
-			file, err := os.Open(p)
-			if err != nil {
-				return
-			}
-			defer file.Close()
-
-			log.Printf("Loading .env from: %s", p)
-			loaded = true
-
-			scanner := bufio.NewScanner(file)
-			for scanner.Scan() {
-				line := strings.TrimSpace(scanner.Text())
-
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
-
-				parts := strings.SplitN(line, "=", 2)
-				if len(parts) != 2 {
-					continue
-				}
-
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-
-				if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
-					value = value[1 : len(value)-1]
-				}
-
-				if os.Getenv(key) == "" {
-					os.Setenv(key, value)
-				}
-			}
-		}()
-	}
-
-	if !loaded {
-		log.Printf("No .env file found, using environment variables only")
-	}
+	return NewOpenAIProvider(cfg.APIKey, cfg.Model, cfg.BaseURL)
 }

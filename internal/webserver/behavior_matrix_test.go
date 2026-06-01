@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
@@ -39,11 +40,19 @@ func newAPITestEnv(t *testing.T) *apiTestEnv {
 		t.Fatalf("migrate database: %v", err)
 	}
 
-	authService, err := auth.NewService(db)
+	authService, err := auth.NewService(db, auth.Config{
+		JWT: auth.JWTConfig{
+			Secret: "test-secret",
+			TTL:    24 * time.Hour,
+		},
+	})
 	if err != nil {
 		t.Fatalf("create auth service: %v", err)
 	}
-	store, err := chatstore.NewService(db, filepath.Join(t.TempDir(), "uploads"))
+	store, err := chatstore.NewService(db, filepath.Join(t.TempDir(), "uploads"), chatstore.Config{
+		MaxImageBytes: 2 * 1024 * 1024,
+		MaxFileBytes:  10 * 1024 * 1024,
+	})
 	if err != nil {
 		t.Fatalf("create store service: %v", err)
 	}

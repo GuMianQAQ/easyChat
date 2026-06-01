@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"easyChat/internal/auth"
+	"easyChat/internal/uid"
 )
 
 func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 	if file == nil {
 		return "", errors.New("缺少图片")
 	}
-	if file.Size > MaxUploadBytes {
+	if file.Size > s.config.MaxImageBytes {
 		return "", errors.New("图片超过 2MB")
 	}
 	if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
@@ -27,7 +28,7 @@ func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 	if extension == "" {
 		extension = ".png"
 	}
-	targetPath := filepath.Join(s.uploadsDir, newID("upload")+extension)
+	targetPath := filepath.Join(s.uploadsDir, uid.New("upload")+extension)
 	if err := copyUploadedFile(file, targetPath); err != nil {
 		return "", err
 	}
@@ -38,7 +39,7 @@ func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileH
 	if file == nil {
 		return FilePayload{}, errors.New("请上传文件")
 	}
-	if file.Size > 10*1024*1024 {
+	if file.Size > s.config.MaxFileBytes {
 		return FilePayload{}, errors.New("文件超过 10MB")
 	}
 
@@ -46,7 +47,7 @@ func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileH
 	if extension == "" {
 		extension = ".bin"
 	}
-	targetPath := filepath.Join(s.uploadsDir, "files", newID("file")+extension)
+	targetPath := filepath.Join(s.uploadsDir, "files", uid.New("file")+extension)
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return FilePayload{}, err
 	}
@@ -56,7 +57,7 @@ func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileH
 
 	now := time.Now()
 	record := UploadedFile{
-		ID:        newID("file"),
+		ID:        uid.New("file"),
 		UserID:    user.ID,
 		FileName:  file.Filename,
 		FileURL:   "/" + filepath.ToSlash(filepath.Join("uploads", "files", filepath.Base(targetPath))),

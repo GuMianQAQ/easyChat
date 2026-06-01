@@ -32,7 +32,10 @@ func newConversationSummaryTestService(t *testing.T) *Service {
 		t.Fatalf("migrate database: %v", err)
 	}
 
-	service, err := NewService(db, filepath.Join(t.TempDir(), "uploads"))
+	service, err := NewService(db, filepath.Join(t.TempDir(), "uploads"), Config{
+		MaxImageBytes: 2 * 1024 * 1024,
+		MaxFileBytes:  10 * 1024 * 1024,
+	})
 	if err != nil {
 		t.Fatalf("create service: %v", err)
 	}

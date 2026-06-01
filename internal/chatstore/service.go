@@ -11,8 +11,9 @@ import (
 const (
 	SystemConversationID  = "system"
 	GroupConversationType = "group"
-	MaxUploadBytes        = 2 * 1024 * 1024
 )
+
+const DefaultGroupPermissions = `{"who_can_change_name":"admin","who_can_change_avatar":"admin","who_can_change_announcement":"admin","who_can_create_vote":"all","who_can_create_solitaire":"all","mute_all":false}`
 
 type Conversation struct {
 	ID           string `gorm:"primaryKey"`
@@ -20,6 +21,7 @@ type Conversation struct {
 	Name         string `gorm:"size:64;not null"`
 	Avatar       string `gorm:"type:text"`
 	Announcement string `gorm:"type:text"`
+	Permissions  string `gorm:"type:text"`
 	CreatedBy    string `gorm:"index;size:64"`
 	BotEnabled   bool   `gorm:"not null;default:false"`
 	CreatedAt    time.Time
@@ -27,12 +29,13 @@ type Conversation struct {
 }
 
 type ConversationMember struct {
-	ID             string `gorm:"primaryKey"`
-	ConversationID string `gorm:"index:idx_member_conversation_user,unique;size:64;not null"`
-	UserID         string `gorm:"index:idx_member_conversation_user,unique;size:64;not null"`
-	Role           string `gorm:"size:16;not null"`
-	GroupNickname  string `gorm:"size:64"`
-	Remark         string `gorm:"size:64"`
+	ID             string     `gorm:"primaryKey"`
+	ConversationID string     `gorm:"index:idx_member_conversation_user,unique;size:64;not null"`
+	UserID         string     `gorm:"index:idx_member_conversation_user,unique;size:64;not null"`
+	Role           string     `gorm:"size:16;not null"`
+	GroupNickname  string     `gorm:"size:64"`
+	Remark         string     `gorm:"size:64"`
+	MutedUntil     *time.Time `gorm:"index"`
 	JoinedAt       time.Time
 	IsPinned       bool `gorm:"default:false"`
 	IsMuted        bool `gorm:"default:false"`
@@ -81,6 +84,68 @@ type UploadedFile struct {
 	MimeType  string `gorm:"size:128;not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type GroupPinnedMessage struct {
+	ID             string    `gorm:"primaryKey"`
+	ConversationID string    `gorm:"index:idx_pinned_conversation,unique;size:64;not null"`
+	MessageID      string    `gorm:"index:idx_pinned_conversation,unique;size:64;not null"`
+	PinnedBy       string    `gorm:"size:64;not null"`
+	CreatedAt      time.Time `gorm:"not null"`
+}
+
+type GroupInviteLink struct {
+	ID             string     `gorm:"primaryKey"`
+	ConversationID string     `gorm:"index;size:64;not null"`
+	Code           string     `gorm:"uniqueIndex;size:32;not null"`
+	CreatedBy      string     `gorm:"size:64;not null"`
+	MaxUses        int        `gorm:"default:0"`
+	UseCount       int        `gorm:"default:0"`
+	ExpiresAt      *time.Time
+	CreatedAt      time.Time
+}
+
+type Vote struct {
+	ID             string    `gorm:"primaryKey"`
+	ConversationID string    `gorm:"index;size:64;not null"`
+	CreatorID      string    `gorm:"size:64;not null"`
+	Question       string    `gorm:"type:text;not null"`
+	AllowMulti     bool      `gorm:"default:false"`
+	Anonymous      bool      `gorm:"default:false"`
+	Deadline       *time.Time
+	CreatedAt      time.Time
+}
+
+type VoteOption struct {
+	ID        string `gorm:"primaryKey"`
+	VoteID    string `gorm:"index;size:64;not null"`
+	OptionText string `gorm:"type:text;not null"`
+	SortOrder int    `gorm:"default:0"`
+}
+
+type VoteRecord struct {
+	ID        string    `gorm:"primaryKey"`
+	VoteID    string    `gorm:"index:idx_vote_record_user,unique;size:64;not null"`
+	UserID    string    `gorm:"index:idx_vote_record_user,unique;size:64;not null"`
+	OptionID  string    `gorm:"index:idx_vote_record_user,unique;size:64;not null"`
+	CreatedAt time.Time
+}
+
+type Solitaire struct {
+	ID             string    `gorm:"primaryKey"`
+	ConversationID string    `gorm:"index;size:64;not null"`
+	CreatorID      string    `gorm:"size:64;not null"`
+	Title          string    `gorm:"size:128;not null"`
+	CreatedAt      time.Time
+}
+
+type SolitaireItem struct {
+	ID          string    `gorm:"primaryKey"`
+	SolitaireID string    `gorm:"index:idx_solitaire_item_user,unique;size:64;not null"`
+	UserID      string    `gorm:"index:idx_solitaire_item_user,unique;size:64;not null"`
+	Content     string    `gorm:"type:text;not null"`
+	SortOrder   int       `gorm:"default:0"`
+	CreatedAt   time.Time
 }
 
 type FilePayload struct {
@@ -143,12 +208,13 @@ type ConversationSummary struct {
 }
 
 type GroupMemberPayload struct {
-	UserID        string `json:"userId"`
-	Username      string `json:"username"`
-	Nickname      string `json:"nickname"`
-	Avatar        string `json:"avatar"`
-	Role          string `json:"role"`
-	GroupNickname string `json:"groupNickname"`
+	UserID        string  `json:"userId"`
+	Username      string  `json:"username"`
+	Nickname      string  `json:"nickname"`
+	Avatar        string  `json:"avatar"`
+	Role          string  `json:"role"`
+	GroupNickname string  `json:"groupNickname"`
+	MutedUntil    *string `json:"mutedUntil,omitempty"`
 }
 
 type GroupConversationPayload struct {
@@ -223,14 +289,15 @@ type RevokeResult struct {
 type Service struct {
 	db         *gorm.DB
 	uploadsDir string
+	config     Config
 }
 
-func NewService(db *gorm.DB, uploadsDir string) (*Service, error) {
+func NewService(db *gorm.DB, uploadsDir string, cfg Config) (*Service, error) {
 	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		return nil, err
 	}
 
-	service := &Service{db: db, uploadsDir: uploadsDir}
+	service := &Service{db: db, uploadsDir: uploadsDir, config: cfg}
 	if err := service.cleanupLegacyPublicConversation(); err != nil {
 		return nil, err
 	}
@@ -240,5 +307,14 @@ func NewService(db *gorm.DB, uploadsDir string) (*Service, error) {
 	if err := service.ensureBaseConversations(); err != nil {
 		return nil, err
 	}
+	if err := service.ensureGroupPermissions(); err != nil {
+		log.Printf("warning: failed to initialize group permissions: %v", err)
+	}
 	return service, nil
+}
+
+func (s *Service) ensureGroupPermissions() error {
+	return s.db.Model(&Conversation{}).
+		Where("type = ? AND (permissions IS NULL OR permissions = '')", GroupConversationType).
+		Update("permissions", DefaultGroupPermissions).Error
 }

@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"easyChat/internal/ai"
 	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
+	"easyChat/internal/config"
 	"easyChat/internal/database"
 	"easyChat/internal/moments"
 	"easyChat/internal/social"
@@ -28,11 +30,12 @@ type Server struct {
 	Social          *social.Service
 	AI              *ai.Service
 	Moments         *moments.Service
+	corsConfig      config.CORSConfig
 	frontendDistDir string
 	uploadsDir      string
 }
 
-func NewServer(addr string) *Server {
+func NewServer(cfg *config.AppConfig) *Server {
 	paths := resolveRuntimePaths()
 
 	db, err := database.Open(paths.dbPath)
@@ -43,11 +46,11 @@ func NewServer(addr string) *Server {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
 
-	authService, err := auth.NewService(db)
+	authService, err := auth.NewService(db, cfg.Auth)
 	if err != nil {
 		log.Fatalf("failed to initialize auth service: %v", err)
 	}
-	store, err := chatstore.NewService(db, paths.uploadsDir)
+	store, err := chatstore.NewService(db, paths.uploadsDir, cfg.Upload)
 	if err != nil {
 		log.Fatalf("failed to initialize chat store: %v", err)
 	}
@@ -56,9 +59,8 @@ func NewServer(addr string) *Server {
 		log.Fatalf("failed to initialize social service: %v", err)
 	}
 
-	aiConfig := ai.LoadConfig()
-	aiProvider := ai.NewProvider(aiConfig)
-	aiService := ai.NewService(aiProvider, store, db, aiConfig)
+	aiProvider := ai.NewProvider(cfg.AI)
+	aiService := ai.NewService(aiProvider, store, db, cfg.AI)
 
 	if err := ai.EnsureSystemUser(db); err != nil {
 		log.Printf("warning: failed to create AI system user: %v", err)
@@ -71,13 +73,14 @@ func NewServer(addr string) *Server {
 	}
 
 	return &Server{
-		Addr:            addr,
-		Hub:             webchat.NewHub(),
+		Addr:            cfg.Server.Addr,
+		Hub:             webchat.NewHub(cfg.WebSocket),
 		Auth:            authService,
 		Store:           store,
 		Social:          socialService,
 		AI:              aiService,
 		Moments:         moments.NewService(db, socialService),
+		corsConfig:      cfg.CORS,
 		frontendDistDir: paths.distDir,
 		uploadsDir:      paths.uploadsDir,
 	}
@@ -98,7 +101,7 @@ func (s *Server) Run() error {
 
 func (s *Server) registerAPIRoutes(router *gin.Engine) {
 	api := router.Group("/api")
-	api.Use(corsMiddleware())
+	api.Use(s.corsMiddleware())
 
 	s.registerAuthRoutes(api)
 	s.registerConversationRoutes(api)
@@ -109,14 +112,16 @@ func (s *Server) registerAPIRoutes(router *gin.Engine) {
 	s.registerFriendRoutes(api)
 	s.registerMomentRoutes(api)
 	s.registerAIRoutes(api)
+	s.registerVoteRoutes(api)
+	s.registerSolitaireRoutes(api)
 }
 
-func corsMiddleware() gin.HandlerFunc {
+func (s *Server) corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", s.corsConfig.AllowOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,Accept,Origin,X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Max-Age", "3600")
+		c.Writer.Header().Set("Access-Control-Max-Age", strconv.Itoa(s.corsConfig.MaxAge))
 
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -135,6 +140,7 @@ func bearerToken(c *gin.Context) string {
 	if token := strings.TrimSpace(c.Query("token")); token != "" {
 		return token
 	}
+	log.Printf("[AuthDebug] bearerToken: no token found, header='%s'", header)
 	return ""
 }
 

@@ -15,13 +15,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = pongWait * 9 / 10
-	maxMessageSize = 2 * 1024 * 1024
-)
-
 type Client struct {
 	hub      *Hub
 	store    *chatstore.Service
@@ -29,6 +22,7 @@ type Client struct {
 	ai       *ai.Service
 	conn     *websocket.Conn
 	send     chan []byte
+	config   Config
 	UserID   string
 	Username string
 	Nickname string
@@ -43,6 +37,7 @@ func NewClient(hub *Hub, store *chatstore.Service, socialService *social.Service
 		ai:       aiService,
 		conn:     conn,
 		send:     make(chan []byte, 64),
+		config:   hub.config,
 		UserID:   strings.TrimSpace(user.ID),
 		Username: strings.TrimSpace(user.Username),
 		Nickname: strings.TrimSpace(user.Nickname),
@@ -114,10 +109,10 @@ func (c *Client) readPump() {
 		_ = c.conn.Close()
 	}()
 
-	c.conn.SetReadLimit(maxMessageSize)
-	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetReadLimit(c.config.MaxMessageSize)
+	_ = c.conn.SetReadDeadline(time.Now().Add(c.config.PongTimeout))
 	c.conn.SetPongHandler(func(string) error {
-		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.config.PongTimeout))
 		return nil
 	})
 
@@ -192,6 +187,19 @@ func (c *Client) readPump() {
 				continue
 			}
 
+			// Check mute status for group messages
+			if validated.MessageScope == ScopeGroup {
+				muted, err := c.store.IsMemberMuted(c.UserID, validated.ConversationID)
+				if err != nil {
+					c.sendError(err.Error())
+					continue
+				}
+				if muted {
+					c.sendError("你已被禁言，无法发送消息")
+					continue
+				}
+			}
+
 			message, err := c.store.SaveMessage(currentUser, chatstore.PersistMessageInput{
 				ID:             validated.ID,
 				ConversationID: validated.ConversationID,
@@ -253,6 +261,7 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) writePump() {
+	pingPeriod := c.config.PongTimeout * 9 / 10
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -262,7 +271,7 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(c.config.WriteTimeout))
 			if !ok {
 				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -281,7 +290,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(c.config.WriteTimeout))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

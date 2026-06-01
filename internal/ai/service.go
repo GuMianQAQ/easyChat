@@ -18,17 +18,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	assistantSystemPrompt = "你是一个友好的 AI 助手，名叫 AI 助手。请用简洁、准确的中文回答问题。"
-	translateSystemPrompt = "你是一个翻译助手。将用户提供的文本翻译成目标语言。只输出翻译结果，不要解释。"
-	summarySystemPrompt   = "你是一个摘要助手。将用户提供的多条消息总结为简洁的摘要。包含关键话题、主要结论和待办事项（如有）。"
-	replySystemPrompt     = "你是一个回复建议助手。根据用户收到的消息，生成 3 个简短的回复建议。每行一个建议，不要编号。"
-	completeSimplePrompt  = "预测用户接下来要输入的一个词（最多4个字）。只返回预测的词，不要返回其他内容。如果无法预测，返回空字符串。"
-	completeMediumPrompt  = "预测用户接下来要输入的一个短语（2-8个字）。只返回预测的短语，不要返回其他内容。如果无法预测，返回空字符串。"
-	completeComplexPrompt = "预测用户接下来要输入的一句话（最多20个字）。只返回预测的句子，不要返回其他内容。如果无法预测，返回空字符串。"
-	predictQuestionPrompt = "根据用户输入的片段，预测用户可能想问的问题，并给出简短答案。要求：1. 只预测一个问题；2. 答案简洁准确，不超过20个字；3. 如果无法预测，question和answer都返回空字符串。返回JSON格式：{\"question\":\"...\",\"answer\":\"...\"}"
-)
-
 type Service struct {
 	provider Provider
 	store    *chatstore.Service
@@ -52,7 +41,7 @@ func (s *Service) GetStats() *Stats {
 }
 
 func (s *Service) HandleMessage(user auth.PublicUser, conversationID, messageScope, content string) (*chatstore.MessagePayload, error) {
-	if !s.config.EnableChat {
+	if !s.config.Enable.Chat {
 		return nil, fmt.Errorf("AI 对话功能已关闭")
 	}
 
@@ -63,11 +52,11 @@ func (s *Service) HandleMessage(user auth.PublicUser, conversationID, messageSco
 
 	history := s.GetConversationHistory(user.ID, conversationID, s.config.ContextWindow)
 	messages := make([]Message, 0, len(history)+2)
-	messages = append(messages, Message{Role: "system", Content: assistantSystemPrompt})
+	messages = append(messages, Message{Role: "system", Content: s.config.SystemPrompt})
 	messages = append(messages, history...)
 	messages = append(messages, Message{Role: "user", Content: query})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.Timeout.Chat)*time.Second)
 	defer cancel()
 
 	resp, err := s.provider.Chat(ctx, ChatRequest{
@@ -121,7 +110,7 @@ func (s *Service) HandleMessageStream(user auth.PublicUser, conversationID, mess
 	go func() {
 		defer close(chunkCh)
 
-		if !s.config.EnableStream {
+		if !s.config.Enable.Stream {
 			resultCh <- StreamResult{Error: fmt.Errorf("AI 流式功能已关闭")}
 			return
 		}
@@ -134,11 +123,11 @@ func (s *Service) HandleMessageStream(user auth.PublicUser, conversationID, mess
 
 		history := s.GetConversationHistory(user.ID, conversationID, s.config.ContextWindow)
 		messages := make([]Message, 0, len(history)+2)
-		messages = append(messages, Message{Role: "system", Content: assistantSystemPrompt})
+		messages = append(messages, Message{Role: "system", Content: s.config.SystemPrompt})
 		messages = append(messages, history...)
 		messages = append(messages, Message{Role: "user", Content: query})
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.Timeout.Stream)*time.Second)
 		defer cancel()
 
 		stream, err := s.provider.Stream(ctx, ChatRequest{
@@ -214,14 +203,14 @@ func (s *Service) HandleMessageStream(user auth.PublicUser, conversationID, mess
 }
 
 func (s *Service) HandleStream(ctx context.Context, query string) (io.Reader, error) {
-	if !s.config.EnableStream {
+	if !s.config.Enable.Stream {
 		return nil, fmt.Errorf("AI 流式功能已关闭")
 	}
 
 	s.stats.RecordStream()
 	return s.provider.Stream(ctx, ChatRequest{
 		Messages: []Message{
-			{Role: "system", Content: assistantSystemPrompt},
+			{Role: "system", Content: s.config.SystemPrompt},
 			{Role: "user", Content: query},
 		},
 		Temperature: s.config.Temperature,
@@ -234,7 +223,7 @@ func (s *Service) EmbedText(ctx context.Context, text string) ([]float64, error)
 }
 
 func (s *Service) Translate(ctx context.Context, text, targetLang string) (string, error) {
-	if !s.config.EnableTools {
+	if !s.config.Enable.Tools {
 		return "", fmt.Errorf("AI 工具功能已关闭")
 	}
 	if targetLang == "" {
@@ -243,11 +232,11 @@ func (s *Service) Translate(ctx context.Context, text, targetLang string) (strin
 
 	resp, err := s.provider.Chat(ctx, ChatRequest{
 		Messages: []Message{
-			{Role: "system", Content: translateSystemPrompt},
+			{Role: "system", Content: s.config.TranslatePrompt},
 			{Role: "user", Content: fmt.Sprintf("将以下文本翻译成%s：\n\n%s", targetLang, text)},
 		},
-		Temperature: 0.3,
-		MaxTokens:   1000,
+		Temperature: s.config.Translate.Temperature,
+		MaxTokens:   s.config.Translate.MaxTokens,
 	})
 	if err != nil {
 		return "", fmt.Errorf("翻译失败: %v", err)
@@ -258,17 +247,17 @@ func (s *Service) Translate(ctx context.Context, text, targetLang string) (strin
 }
 
 func (s *Service) Summarize(ctx context.Context, texts []string) (string, error) {
-	if !s.config.EnableTools {
+	if !s.config.Enable.Tools {
 		return "", fmt.Errorf("AI 工具功能已关闭")
 	}
 
 	resp, err := s.provider.Chat(ctx, ChatRequest{
 		Messages: []Message{
-			{Role: "system", Content: summarySystemPrompt},
+			{Role: "system", Content: s.config.SummarizePrompt},
 			{Role: "user", Content: fmt.Sprintf("请总结以下消息：\n\n%s", strings.Join(texts, "\n"))},
 		},
-		Temperature: 0.3,
-		MaxTokens:   500,
+		Temperature: s.config.Summarize.Temperature,
+		MaxTokens:   s.config.Summarize.MaxTokens,
 	})
 	if err != nil {
 		return "", fmt.Errorf("摘要失败: %v", err)
@@ -279,18 +268,18 @@ func (s *Service) Summarize(ctx context.Context, texts []string) (string, error)
 }
 
 func (s *Service) Complete(ctx context.Context, text, granularity string) (string, error) {
-	if !s.config.EnableTools {
+	if !s.config.Enable.Tools {
 		return "", nil
 	}
 
 	var systemPrompt string
 	switch granularity {
 	case "medium":
-		systemPrompt = completeMediumPrompt
+		systemPrompt = s.config.CompleteMediumPrompt
 	case "complex":
-		systemPrompt = completeComplexPrompt
+		systemPrompt = s.config.CompleteComplexPrompt
 	default:
-		systemPrompt = completeSimplePrompt
+		systemPrompt = s.config.CompleteSimplePrompt
 	}
 
 	resp, err := s.provider.Chat(ctx, ChatRequest{
@@ -298,78 +287,55 @@ func (s *Service) Complete(ctx context.Context, text, granularity string) (strin
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: fmt.Sprintf("用户当前输入: %s", text)},
 		},
-		Temperature: 0.3,
-		MaxTokens:   50,
+		Temperature: s.config.Temperature,
+		MaxTokens:   s.config.Complete.MaxTokens,
 	})
 	if err != nil {
+		log.Printf("[Complete] AI error: %v", err)
 		return "", nil
 	}
 
+	completion := strings.TrimSpace(resp.Content)
+	log.Printf("[Complete] AI response: text=%q, granularity=%s, completion=%q", text, granularity, completion)
+
 	s.stats.RecordComplete()
-	return strings.TrimSpace(resp.Content), nil
+	return completion, nil
 }
 
 func (s *Service) PredictQuestion(ctx context.Context, text string) (string, string, error) {
-	if !s.config.EnableTools {
+	if !s.config.Enable.Tools {
 		return "", "", nil
 	}
 
 	resp, err := s.provider.Chat(ctx, ChatRequest{
 		Messages: []Message{
-			{Role: "system", Content: predictQuestionPrompt},
+			{Role: "system", Content: s.config.PredictQuestionPrompt},
 			{Role: "user", Content: fmt.Sprintf("用户当前输入: %s", text)},
 		},
-		Temperature: 0.3,
-		MaxTokens:   100,
+		Temperature: s.config.Temperature,
+		MaxTokens:   s.config.Predict.MaxTokens,
 	})
 	if err != nil {
+		log.Printf("[PredictQuestion] AI error: %v", err)
 		return "", "", nil
 	}
+
+	rawContent := strings.TrimSpace(resp.Content)
+	log.Printf("[PredictQuestion] AI raw response: %q", rawContent)
 
 	var result struct {
 		Question string `json:"question"`
 		Answer   string `json:"answer"`
 	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(rawContent), &result); err != nil {
+		log.Printf("[PredictQuestion] JSON parse error: %v, raw content: %q", err, rawContent)
 		return "", "", nil
 	}
 
+	log.Printf("[PredictQuestion] parsed result: question=%q, answer=%q", result.Question, result.Answer)
+
 	s.stats.RecordPredict()
 	return strings.TrimSpace(result.Question), strings.TrimSpace(result.Answer), nil
-}
-
-func (s *Service) GenerateReplies(ctx context.Context, message string) ([]string, error) {
-	if !s.config.EnableTools {
-		return nil, fmt.Errorf("AI 工具功能已关闭")
-	}
-
-	resp, err := s.provider.Chat(ctx, ChatRequest{
-		Messages: []Message{
-			{Role: "system", Content: replySystemPrompt},
-			{Role: "user", Content: fmt.Sprintf("收到这条消息，请生成 3 个回复建议：\n\n%s", message)},
-		},
-		Temperature: 0.7,
-		MaxTokens:   200,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("生成回复建议失败: %v", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(resp.Content), "\n")
-	replies := make([]string, 0, 3)
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		line = strings.TrimSpace(strings.TrimLeft(line, "0123456789.-)、"))
-		if line != "" {
-			replies = append(replies, line)
-		}
-	}
-
-	s.stats.RecordReply()
-	return replies, nil
 }
 
 func (s *Service) SaveConversation(userID, conversationID, role, content string) error {
@@ -415,14 +381,14 @@ func (s *Service) SaveEmbedding(conversationID, messageID, content string, embed
 }
 
 func (s *Service) SearchHybrid(conversationID, query string, limit int) ([]SearchResultItem, error) {
-	if !s.config.EnableSearch {
+	if !s.config.Enable.Search {
 		return nil, fmt.Errorf("AI 搜索功能已关闭")
 	}
 	if limit <= 0 {
 		limit = 10
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.Timeout.Chat)*time.Second)
 	defer cancel()
 
 	queryEmbedding, err := s.provider.Embed(ctx, query)

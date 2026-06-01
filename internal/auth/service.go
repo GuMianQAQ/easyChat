@@ -2,25 +2,22 @@ package auth
 
 import (
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"easyChat/internal/uid"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 const (
-	tokenTTL = 24 * time.Hour
-
 	errPasswordsMismatch      = "两次输入的密码不一致"
 	errCaptchaRequired        = "请输入验证码"
 	errCaptchaInvalid         = "验证码错误"
@@ -113,20 +110,15 @@ type ChangePasswordRequest struct {
 type Service struct {
 	db            *gorm.DB
 	captchas      *CaptchaStore
-	secret        []byte
+	config        Config
 	afterRegister func(tx *gorm.DB, user User) error
 }
 
-func NewService(db *gorm.DB) (*Service, error) {
-	secret := strings.TrimSpace(os.Getenv("EASYCHAT_JWT_SECRET"))
-	if secret == "" {
-		secret = "easychat-local-development-secret"
-	}
-
+func NewService(db *gorm.DB, cfg Config) (*Service, error) {
 	return &Service{
 		db:       db,
 		captchas: NewCaptchaStore(),
-		secret:   []byte(secret),
+		config:   cfg,
 	}, nil
 }
 
@@ -172,7 +164,7 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 	var user User
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		user = User{
-			ID:                  newID("usr"),
+			ID:                  uid.New("usr"),
 			Username:            username,
 			PasswordHash:        string(hash),
 			Nickname:            nickname,
@@ -367,7 +359,7 @@ func (s *Service) createToken(userID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := json.Marshal(tokenClaims{UserID: userID, Exp: time.Now().Add(tokenTTL).Unix()})
+	body, err := json.Marshal(tokenClaims{UserID: userID, Exp: time.Now().Add(s.config.JWT.TTL).Unix()})
 	if err != nil {
 		return "", err
 	}
@@ -375,7 +367,7 @@ func (s *Service) createToken(userID string) (string, error) {
 	encodedHeader := base64.RawURLEncoding.EncodeToString(header)
 	encodedBody := base64.RawURLEncoding.EncodeToString(body)
 	unsigned := encodedHeader + "." + encodedBody
-	signature := sign(unsigned, s.secret)
+	signature := sign(unsigned, []byte(s.config.JWT.Secret))
 	return unsigned + "." + signature, nil
 }
 
@@ -385,7 +377,7 @@ func (s *Service) verifyToken(token string) (tokenClaims, error) {
 		return tokenClaims{}, errors.New(errAuthExpired)
 	}
 
-	expected := sign(parts[0]+"."+parts[1], s.secret)
+	expected := sign(parts[0]+"."+parts[1], []byte(s.config.JWT.Secret))
 	if !hmac.Equal([]byte(expected), []byte(parts[2])) {
 		return tokenClaims{}, errors.New(errAuthExpired)
 	}
@@ -479,10 +471,4 @@ func normalizeSignature(signature string) (string, error) {
 	return trimmed, nil
 }
 
-func newID(prefix string) string {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
-	}
-	return fmt.Sprintf("%s-%x", prefix, buf)
-}
+

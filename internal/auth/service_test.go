@@ -3,6 +3,7 @@ package auth
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -24,7 +25,12 @@ func TestRegisterLoginAndProfileFlow(t *testing.T) {
 		_ = sqlDB.Close()
 	})
 
-	svc, err := NewService(db)
+	svc, err := NewService(db, Config{
+		JWT: JWTConfig{
+			Secret: "test-secret",
+			TTL:    24 * time.Hour,
+		},
+	})
 	if err != nil {
 		t.Fatalf("create service: %v", err)
 	}

@@ -1,7 +1,6 @@
 package social
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"easyChat/internal/auth"
+	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
 )
@@ -267,7 +267,7 @@ func (s *Service) SendFriendRequest(fromUserID string, input SendFriendRequestIn
 	}
 
 	request := FriendRequest{
-		ID:         newID("req"),
+		ID:         uid.New("req"),
 		FromUserID: fromUser.ID,
 		ToUserID:   toUser.ID,
 		Message:    message,
@@ -648,13 +648,13 @@ func (s *Service) ensureSystemFriendTx(tx *gorm.DB, userID string) error {
 func createFriendshipPairTx(tx *gorm.DB, left, right auth.User) error {
 	for _, item := range []Friendship{
 		{
-			ID:         newID("frd"),
+			ID:         uid.New("frd"),
 			UserID:     left.ID,
 			FriendID:   right.ID,
 			Permission: "chat",
 		},
 		{
-			ID:         newID("frd"),
+			ID:         uid.New("frd"),
 			UserID:     right.ID,
 			FriendID:   left.ID,
 			Permission: "chat",
@@ -863,10 +863,4 @@ func formatNullableTime(value *time.Time) string {
 	return formatTime(*value)
 }
 
-func newID(prefix string) string {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
-	}
-	return fmt.Sprintf("%s-%x", prefix, buf)
-}
+

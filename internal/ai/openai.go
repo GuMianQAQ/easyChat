@@ -124,6 +124,8 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
+	log.Printf("AI Chat raw response body: %s", string(respBody))
+
 	var openAIResp openAIResponse
 	if err := json.Unmarshal(respBody, &openAIResp); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)

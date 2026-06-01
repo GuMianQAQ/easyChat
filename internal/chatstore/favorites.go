@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"easyChat/internal/uid"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -46,7 +48,7 @@ func (s *Service) CreateFavorite(userID, messageID string) (FavoritePayload, err
 
 	now := time.Now()
 	record := Favorite{
-		ID:               newID("fav"),
+		ID:               uid.New("fav"),
 		UserID:           userID,
 		MessageID:        message.ID,
 		ConversationID:   message.ConversationID,

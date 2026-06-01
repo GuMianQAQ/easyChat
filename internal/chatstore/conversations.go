@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"easyChat/internal/auth"
+	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -131,14 +132,14 @@ func (s *Service) EnsurePrivateConversation(currentUserID, targetUserID string) 
 
 		members := []ConversationMember{
 			{
-				ID:             newID("member"),
+				ID:             uid.New("member"),
 				ConversationID: conversationID,
 				UserID:         currentUserID,
 				Role:           "member",
 				JoinedAt:       now,
 			},
 			{
-				ID:             newID("member"),
+				ID:             uid.New("member"),
 				ConversationID: conversationID,
 				UserID:         targetUserID,
 				Role:           "member",
@@ -204,7 +205,7 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 	}
 
 	now := time.Now()
-	conversationID := newID("group")
+	conversationID := uid.New("group")
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		conversation := Conversation{
 			ID:        conversationID,
@@ -221,7 +222,7 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 
 		members := make([]ConversationMember, 0, len(unique)+1)
 		members = append(members, ConversationMember{
-			ID:             newID("member"),
+			ID:             uid.New("member"),
 			ConversationID: conversationID,
 			UserID:         creatorID,
 			Role:           "owner",
@@ -229,7 +230,7 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 		})
 		for _, memberID := range unique {
 			members = append(members, ConversationMember{
-				ID:             newID("member"),
+				ID:             uid.New("member"),
 				ConversationID: conversationID,
 				UserID:         memberID,
 				Role:           "member",
@@ -510,7 +511,7 @@ func (s *Service) ensureSettingsMember(userID, conversationID string) (*Conversa
 
 	now := time.Now()
 	record := ConversationMember{
-		ID:             newID("member"),
+		ID:             uid.New("member"),
 		ConversationID: conversationID,
 		UserID:         userID,
 		Role:           "member",
@@ -543,7 +544,7 @@ func (s *Service) EnsureMember(conversationID, userID string) error {
 	}
 
 	record := ConversationMember{
-		ID:             newID("member"),
+		ID:             uid.New("member"),
 		ConversationID: conversationID,
 		UserID:         userID,
 		Role:           "member",

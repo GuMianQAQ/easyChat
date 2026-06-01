@@ -33,7 +33,14 @@ func (m *MockProvider) Embed(ctx context.Context, text string) ([]float64, error
 
 func TestTranslate(t *testing.T) {
 	mock := &MockProvider{response: "Hello"}
-	service := NewService(mock, nil, nil, DefaultConfig())
+	service := NewService(mock, nil, nil, Config{
+		Enable:    EnableConfig{Chat: true, Stream: true, Tools: true, Search: true},
+		Timeout:   TimeoutConfig{Chat: 30, Stream: 60},
+		Translate: TranslateConfig{Temperature: 0.3, MaxTokens: 1000},
+		Summarize: SummarizeConfig{Temperature: 0.3, MaxTokens: 500},
+		Complete:  CompleteConfig{MaxTokens: 3000},
+		Predict:   PredictConfig{MaxTokens: 3000},
+	})
 
 	result, err := service.Translate(context.Background(), "你好", "英文")
 	if err != nil {
@@ -46,7 +53,14 @@ func TestTranslate(t *testing.T) {
 
 func TestSummarize(t *testing.T) {
 	mock := &MockProvider{response: "这是一段摘要"}
-	service := NewService(mock, nil, nil, DefaultConfig())
+	service := NewService(mock, nil, nil, Config{
+		Enable:    EnableConfig{Chat: true, Stream: true, Tools: true, Search: true},
+		Timeout:   TimeoutConfig{Chat: 30, Stream: 60},
+		Translate: TranslateConfig{Temperature: 0.3, MaxTokens: 1000},
+		Summarize: SummarizeConfig{Temperature: 0.3, MaxTokens: 500},
+		Complete:  CompleteConfig{MaxTokens: 3000},
+		Predict:   PredictConfig{MaxTokens: 3000},
+	})
 
 	result, err := service.Summarize(context.Background(), []string{"消息1", "消息2"})
 	if err != nil {
@@ -54,19 +68,6 @@ func TestSummarize(t *testing.T) {
 	}
 	if result != "这是一段摘要" {
 		t.Errorf("expected '这是一段摘要', got '%s'", result)
-	}
-}
-
-func TestGenerateReplies(t *testing.T) {
-	mock := &MockProvider{response: "好的\n没问题\n收到"}
-	service := NewService(mock, nil, nil, DefaultConfig())
-
-	replies, err := service.GenerateReplies(context.Background(), "你好")
-	if err != nil {
-		t.Fatalf("GenerateReplies() error: %v", err)
-	}
-	if len(replies) != 3 {
-		t.Errorf("expected 3 replies, got %d", len(replies))
 	}
 }
 

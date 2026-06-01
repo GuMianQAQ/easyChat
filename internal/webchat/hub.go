@@ -17,15 +17,17 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	dispatch   chan dispatchRequest
+	config     Config
 }
 
-func NewHub() *Hub {
+func NewHub(cfg Config) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		userIndex:  make(map[string]map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		dispatch:   make(chan dispatchRequest),
+		config:     cfg,
 	}
 }
 

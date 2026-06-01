@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"easyChat/internal/uid"
 )
 
 const captchaTTL = 5 * time.Minute
@@ -37,7 +39,7 @@ func NewCaptchaStore() *CaptchaStore {
 
 func (s *CaptchaStore) Create() (CaptchaResponse, error) {
 	code := randomDigits(4)
-	id := newID("cap")
+	id := uid.New("cap")
 	imageData, err := renderCaptcha(code)
 	if err != nil {
 		return CaptchaResponse{}, err
