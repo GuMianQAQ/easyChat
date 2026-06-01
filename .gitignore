@@ -16,10 +16,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Env
-.env
-.env.*
-!.env.example
+# Config files (contains secrets - use .local.yaml or env vars)
+config/ai.yaml
+config/auth.yaml
+config/config.yaml
+config/*.local.yaml
+
+# Config examples (safe to commit)
+!config/*.yaml.example
 
 # Go build outputs
 *.exe
@@ -105,3 +109,9 @@ frontend/.test-dist/
 
 frontend/__node_modules_tmp__/
 **/__node_modules_tmp__/
+
+# OpenSpec runtime
+.omo/
+
+# Tools cache
+.tools/
