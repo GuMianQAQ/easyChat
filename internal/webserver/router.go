@@ -68,9 +68,6 @@ func NewServer(cfg *config.AppConfig) *Server {
 	authService.SetAfterRegister(func(tx *gorm.DB, user auth.User) error {
 		return socialService.EnsureSystemFriendInTx(tx, user.ID)
 	})
-	if err := socialService.EnsureSystemFriendForAllUsers(); err != nil {
-		log.Printf("warning: failed to backfill AI friendships: %v", err)
-	}
 
 	return &Server{
 		Addr:            cfg.Server.Addr,
@@ -89,6 +86,7 @@ func NewServer(cfg *config.AppConfig) *Server {
 func (s *Server) Run() error {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(ErrorHandler())
 	s.registerAPIRoutes(router)
 	router.GET("/ws", s.handleWebSocket)
 	s.registerFrontendRoutes(router)
@@ -103,17 +101,22 @@ func (s *Server) registerAPIRoutes(router *gin.Engine) {
 	api := router.Group("/api")
 	api.Use(s.corsMiddleware())
 
-	s.registerAuthRoutes(api)
-	s.registerConversationRoutes(api)
-	s.registerGroupRoutes(api)
-	s.registerMessageRoutes(api)
-	s.registerFavoriteRoutes(api)
-	s.registerFileRoutes(api)
-	s.registerFriendRoutes(api)
-	s.registerMomentRoutes(api)
-	s.registerAIRoutes(api)
-	s.registerVoteRoutes(api)
-	s.registerSolitaireRoutes(api)
+	s.registerPublicAuthRoutes(api)
+
+	protected := api.Group("")
+	protected.Use(s.authMiddleware())
+
+	s.registerProtectedAuthRoutes(protected)
+	s.registerConversationRoutes(protected)
+	s.registerGroupRoutes(protected)
+	s.registerMessageRoutes(protected)
+	s.registerFavoriteRoutes(protected)
+	s.registerFileRoutes(protected)
+	s.registerFriendRoutes(protected)
+	s.registerMomentRoutes(protected)
+	s.registerAIRoutes(protected)
+	s.registerVoteRoutes(protected)
+	s.registerSolitaireRoutes(protected)
 }
 
 func (s *Server) corsMiddleware() gin.HandlerFunc {
@@ -140,8 +143,26 @@ func bearerToken(c *gin.Context) string {
 	if token := strings.TrimSpace(c.Query("token")); token != "" {
 		return token
 	}
-	log.Printf("[AuthDebug] bearerToken: no token found, header='%s'", header)
 	return ""
+}
+
+func (s *Server) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := bearerToken(c)
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未提供认证令牌"})
+			return
+		}
+
+		user, err := s.Auth.UserFromToken(token)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "认证失败"})
+			return
+		}
+
+		c.Set("user", user)
+		c.Next()
+	}
 }
 
 func (s *Server) registerFrontendRoutes(router *gin.Engine) {

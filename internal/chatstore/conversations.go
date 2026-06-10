@@ -1,13 +1,13 @@
 package chatstore
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"easyChat/internal/auth"
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
@@ -21,26 +21,6 @@ func (s *Service) ensureBaseConversations() error {
 		return err
 	}
 	return nil
-}
-
-func (s *Service) cleanupLegacyPublicConversation() error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("conversation_id = ?", "public").Delete(&Message{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("conversation_id = ?", "public").Delete(&ConversationMember{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("id = ?", "public").Delete(&Conversation{}).Error; err != nil {
-			return err
-		}
-		return nil
-	})
-}
-
-func (s *Service) cleanupAIFromPrivateConversations() error {
-	return s.db.Where("user_id = ? AND conversation_id LIKE ?", "ai-assistant", "private:%").
-		Delete(&ConversationMember{}).Error
 }
 
 func (s *Service) ListConversations(userID string) ([]ConversationSummary, error) {
@@ -95,17 +75,17 @@ func (s *Service) EnsurePrivateConversation(currentUserID, targetUserID string) 
 	currentUserID = strings.TrimSpace(currentUserID)
 	targetUserID = strings.TrimSpace(targetUserID)
 	if currentUserID == "" || targetUserID == "" {
-		return ConversationSummary{}, errors.New("缺少有效的用户 ID")
+		return ConversationSummary{}, apperrors.ErrMissingRequiredParam
 	}
 	if currentUserID == targetUserID {
-		return ConversationSummary{}, errors.New("不能和自己创建私聊会话")
+		return ConversationSummary{}, apperrors.ErrBadRequest
 	}
 	if _, err := s.lookupUser(currentUserID); err != nil {
-		return ConversationSummary{}, errors.New("当前用户不存在")
+		return ConversationSummary{}, apperrors.ErrNotFound
 	}
 	targetUser, err := s.lookupUser(targetUserID)
 	if err != nil {
-		return ConversationSummary{}, errors.New("目标用户不存在")
+		return ConversationSummary{}, apperrors.ErrNotFound
 	}
 
 	conversationID := StablePrivateConversationID(currentUserID, targetUserID)
@@ -181,7 +161,7 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 	creatorID = strings.TrimSpace(creatorID)
 	name = strings.TrimSpace(name)
 	if creatorID == "" {
-		return ConversationSummary{}, errors.New("缺少有效的用户 ID")
+		return ConversationSummary{}, apperrors.ErrMissingRequiredParam
 	}
 
 	unique := make([]string, 0, len(memberIDs))
@@ -198,7 +178,7 @@ func (s *Service) CreateGroupConversation(creatorID, name string, memberIDs []st
 		unique = append(unique, memberID)
 	}
 	if len(unique) == 0 {
-		return ConversationSummary{}, errors.New("请选择至少一位好友创建群聊")
+		return ConversationSummary{}, apperrors.ErrSelectAtLeastOneFriend
 	}
 	if name == "" {
 		name = "群聊"
@@ -342,7 +322,7 @@ func (s *Service) MarkConversationRead(userID, conversationID string) error {
 func (s *Service) resolveConversation(userID, conversationID, messageScope string) (Conversation, error) {
 	conversationID = strings.TrimSpace(conversationID)
 	if conversationID == "" {
-		return Conversation{}, errors.New("缺少会话 ID")
+		return Conversation{}, apperrors.ErrMissingRequiredParam
 	}
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {
@@ -353,23 +333,23 @@ func (s *Service) resolveConversation(userID, conversationID, messageScope strin
 		expected = conversation.Type
 	}
 	if expected != conversation.Type {
-		return Conversation{}, errors.New("消息类型与会话类型不匹配")
+		return Conversation{}, apperrors.ErrBadRequest
 	}
-	if conversation.Type != "private" && conversation.Type != GroupConversationType && conversation.Type != "system" {
-		return Conversation{}, errors.New("不支持的会话类型")
+	if conversation.Type != "private" && conversation.Type != GroupConversationType {
+		return Conversation{}, apperrors.ErrBadRequest
 	}
 	return conversation, nil
 }
 
 func (s *Service) getConversationForUser(userID, conversationID string) (Conversation, error) {
 	if strings.TrimSpace(conversationID) == "" {
-		return Conversation{}, errors.New("缺少会话 ID")
+		return Conversation{}, apperrors.ErrMissingRequiredParam
 	}
 
 	var conversation Conversation
 	if err := s.db.First(&conversation, "id = ?", conversationID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Conversation{}, errors.New("会话不存在")
+		if err == gorm.ErrRecordNotFound {
+			return Conversation{}, apperrors.ErrConversationNotFound
 		}
 		return Conversation{}, err
 	}
@@ -385,10 +365,10 @@ func (s *Service) getConversationForUser(userID, conversationID string) (Convers
 		return Conversation{}, err
 	}
 	if count == 0 {
-		return Conversation{}, errors.New("无权访问该会话")
+		return Conversation{}, apperrors.ErrConversationAccessDenied
 	}
 	if conversation.Type != "private" && conversation.Type != GroupConversationType {
-		return Conversation{}, errors.New("不支持的会话类型")
+		return Conversation{}, apperrors.ErrBadRequest
 	}
 	return conversation, nil
 }
@@ -464,7 +444,7 @@ func (s *Service) privatePartner(conversationID, currentUserID string) (auth.Use
 		}
 		return s.lookupUser(member.UserID)
 	}
-	return auth.User{}, errors.New("私聊成员不存在")
+	return auth.User{}, apperrors.ErrNotFound
 }
 
 func (s *Service) memberMap(userID string) (map[string]*ConversationMember, error) {
@@ -483,7 +463,7 @@ func (s *Service) memberMap(userID string) (map[string]*ConversationMember, erro
 func (s *Service) memberRecord(userID, conversationID string) (*ConversationMember, error) {
 	var member ConversationMember
 	if err := s.db.Where("conversation_id = ? AND user_id = ?", conversationID, userID).First(&member).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
@@ -506,7 +486,7 @@ func (s *Service) ensureSettingsMember(userID, conversationID string) (*Conversa
 	}
 
 	if conversation.Type == "private" || conversation.Type == GroupConversationType {
-		return nil, errors.New("当前会话不存在成员设置")
+		return nil, apperrors.ErrNotFound
 	}
 
 	now := time.Now()
@@ -530,7 +510,7 @@ func (s *Service) EnsureMember(conversationID, userID string) error {
 	conversationID = strings.TrimSpace(conversationID)
 	userID = strings.TrimSpace(userID)
 	if conversationID == "" || userID == "" {
-		return errors.New("缺少会话 ID 或用户 ID")
+		return apperrors.ErrMissingRequiredParam
 	}
 
 	var count int64

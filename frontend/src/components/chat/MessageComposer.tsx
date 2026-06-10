@@ -1,4 +1,4 @@
-import { File, Image, Scissors, Smile } from "lucide-react";
+import { File, Image, Scissors, Smile, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompletionGranularity, GroupMemberItem, MessageQuote, PredictionScope } from "../../types/chat";
 import { prepareImageDataUrl } from "../../utils/media";
@@ -16,6 +16,7 @@ interface MessageComposerProps {
   placeholderText?: string;
   enterToSend: boolean;
   clearAfterSend: boolean;
+  hideWindowOnCapture: boolean;
   quote?: MessageQuote | null;
   isAIAssistant?: boolean;
   isGroupChat?: boolean;
@@ -30,7 +31,8 @@ interface MessageComposerProps {
   onContentChange: (value: string) => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
-  onCaptureScreen: (quote?: MessageQuote | null) => Promise<boolean>;
+  onSendFile: (file: File, quote?: MessageQuote | null) => Promise<boolean>;
+  onCaptureScreen: (hideWindow: boolean) => Promise<string | null>;
   onNotice: (title: string, content: string, level?: "info" | "success" | "warning" | "error") => void;
 }
 
@@ -42,6 +44,7 @@ function MessageComposer({
   placeholderText = "输入消息",
   enterToSend,
   clearAfterSend,
+  hideWindowOnCapture,
   quote,
   isAIAssistant,
   isGroupChat,
@@ -56,14 +59,18 @@ function MessageComposer({
   onContentChange,
   onSendText,
   onSendImage,
+  onSendFile,
   onCaptureScreen,
   onNotice,
 }: MessageComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [mentionKeyword, setMentionKeyword] = useState<string | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const selectionRef = useRef({ start: 0, end: 0 });
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { completion, dismissCompletion } = useInputCompletion({
     content,
@@ -82,15 +89,30 @@ function MessageComposer({
     token: token ?? "",
   });
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = content.trim();
-    if (!trimmed) {
+    const hasScreenshot = screenshotPreview !== null;
+
+    if (!trimmed && !hasScreenshot) {
       return;
     }
-    if (onSendText(trimmed, quote)) {
-      if (clearAfterSend) {
-        onContentChange("");
+
+    let imageSent = false;
+    if (hasScreenshot) {
+      imageSent = await onSendImage(screenshotPreview, quote);
+      if (imageSent) {
+        setScreenshotPreview(null);
       }
+    }
+
+    if (trimmed) {
+      if (onSendText(trimmed, quote)) {
+        if (clearAfterSend) {
+          onContentChange("");
+        }
+        onClearQuote();
+      }
+    } else if (imageSent) {
       onClearQuote();
     }
   };
@@ -133,6 +155,16 @@ function MessageComposer({
     }
   };
 
+  const sendFile = async (file: File) => {
+    try {
+      if (await onSendFile(file, quote)) {
+        onClearQuote();
+      }
+    } catch (error) {
+      onNotice("文件", error instanceof Error ? error.message : "文件发送失败", "error");
+    }
+  };
+
   useEffect(() => {
     setEmojiOpen(false);
   }, [activeConversationId]);
@@ -165,6 +197,60 @@ function MessageComposer({
   return (
     <div ref={composerRef} className="composer">
       {quote ? <QuotePreview quote={quote} onClear={onClearQuote} /> : null}
+      {screenshotPreview ? (
+        <div className="screenshot-preview">
+          <img className="screenshot-preview-thumb" src={screenshotPreview} alt="截图预览" />
+          <div className="screenshot-preview-actions">
+            <button
+              type="button"
+              className="screenshot-preview-send"
+              onClick={async () => {
+                const sent = await onSendImage(screenshotPreview, quote);
+                if (sent) {
+                  setScreenshotPreview(null);
+                  onClearQuote();
+                }
+              }}
+            >
+              发送
+            </button>
+            <button
+              type="button"
+              className="screenshot-preview-close"
+              onClick={() => setScreenshotPreview(null)}
+              title="取消截图"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            void sendImageFile(file);
+          }
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            void sendFile(file);
+          }
+          event.target.value = "";
+        }}
+      />
 
       <div className="composer-toolbar">
         <button
@@ -177,19 +263,29 @@ function MessageComposer({
         >
           <Smile size={18} />
         </button>
-        <button type="button" disabled title="图片">
+        <button
+          type="button"
+          title="图片"
+          disabled={disabled}
+          onClick={() => imageInputRef.current?.click()}
+        >
           <Image size={18} />
         </button>
-        <button type="button" disabled title="文件">
+        <button
+          type="button"
+          title="文件"
+          disabled={disabled}
+          onClick={() => fileInputRef.current?.click()}
+        >
           <File size={18} />
         </button>
         <button
           type="button"
           title="截图"
           onClick={async () => {
-            const sent = await onCaptureScreen(quote);
-            if (sent) {
-              onClearQuote();
+            const dataUrl = await onCaptureScreen(hideWindowOnCapture);
+            if (dataUrl) {
+              setScreenshotPreview(dataUrl);
             }
           }}
         >
@@ -282,7 +378,7 @@ function MessageComposer({
               dismissCompletion();
             } else if (enterToSend && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              submit();
+              void submit();
             }
           }}
         />
@@ -322,8 +418,8 @@ function MessageComposer({
         <button
           type="button"
           className="composer-send"
-          disabled={disabled || !content.trim()}
-          onClick={submit}
+          disabled={disabled || (!content.trim() && !screenshotPreview)}
+          onClick={() => void submit()}
         >
           发送
         </button>

@@ -80,7 +80,8 @@ interface ChatShellActions {
   onUploadImage: (file: File) => Promise<string>;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
-  onCaptureScreen: (quote?: MessageQuote | null) => Promise<boolean>;
+  onSendFile: (file: File, quote?: MessageQuote | null) => Promise<boolean>;
+  onCaptureScreen: (hideWindow: boolean) => Promise<string | null>;
   onDraftChange: (value: string) => void;
   onLoadMore: () => void;
   onRetry: (messageId: string) => void;
@@ -363,9 +364,11 @@ export default function AppShell({
                 completionScope={settings.completionScope}
                 questionPrediction={settings.questionPrediction}
                 questionPredictionScope={settings.questionPredictionScope}
+                hideWindowOnCapture={settings.hideWindowOnCapture}
                 onDraftChange={chatActions.onDraftChange}
                 onSendText={chatActions.onSendText}
                 onSendImage={chatActions.onSendImage}
+                onSendFile={chatActions.onSendFile}
                 onCaptureScreen={chatActions.onCaptureScreen}
                 onLoadMore={chatActions.onLoadMore}
                 onRetry={chatActions.onRetry}

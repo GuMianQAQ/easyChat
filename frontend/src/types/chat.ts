@@ -1,4 +1,4 @@
-export type MessageType = "chat" | "system" | "error" | "revoke" | "ai-stream-chunk" | "ai-stream-done";
+export type MessageType = "chat" | "system" | "notification" | "error" | "revoke" | "ai-stream-chunk" | "ai-stream-done";
 export type ChatMessageType = "text" | "image" | "file";
 export type MessageStatus = "sending" | "sent" | "failed";
 export type MessageScope = "private" | "group" | "system";
@@ -345,6 +345,7 @@ export interface UserSettings {
   rememberProfile: boolean;
   clearAfterSend: boolean;
   enterToSend: boolean;
+  hideWindowOnCapture: boolean;
   aiSearchEnabled: boolean;
   inputCompletion: boolean;
   completionGranularity: CompletionGranularity;
@@ -394,21 +395,11 @@ export interface PinnedMessage {
 export interface GroupFileItem {
   id: string;
   senderId: string;
+  senderName: string;
   fileName: string;
   fileUrl: string;
   fileSize: number;
   mimeType: string;
-  createdAt: string;
-}
-
-export interface GroupInviteLink {
-  id: string;
-  conversationId: string;
-  code: string;
-  createdBy: string;
-  maxUses: number;
-  useCount: number;
-  expiresAt?: string | null;
   createdAt: string;
 }
 
@@ -424,6 +415,7 @@ export interface Vote {
   conversationId: string;
   creatorId: string;
   question: string;
+  voteType: string;
   allowMulti: boolean;
   anonymous: boolean;
   deadline?: string | null;
@@ -445,6 +437,7 @@ export interface Solitaire {
   conversationId: string;
   creatorId: string;
   title: string;
+  format: string;
   createdAt: string;
   items: SolitaireItem[];
 }
@@ -456,4 +449,35 @@ export interface GroupPermissions {
   who_can_create_vote: "admin" | "all";
   who_can_create_solitaire: "admin" | "all";
   mute_all: boolean;
+}
+
+export interface Album {
+  id: string;
+  conversationId: string;
+  name: string;
+  description: string;
+  coverUrl?: string;
+  photoCount: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface AlbumPhoto {
+  id: string;
+  albumId: string;
+  fileUrl: string;
+  thumbnailUrl?: string;
+  uploaderId: string;
+  uploadedByName: string;
+  createdAt: string;
+}
+
+export interface GroupMemberPayload {
+  userId: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+  role: "owner" | "admin" | "member";
+  groupNickname: string;
+  mutedUntil?: string | null;
 }

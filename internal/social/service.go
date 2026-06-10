@@ -2,12 +2,12 @@ package social
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"easyChat/internal/auth"
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
@@ -173,12 +173,12 @@ func (s *Service) SearchUser(requesterID, username string) (*UserSearchResult, e
 	requesterID = strings.TrimSpace(requesterID)
 	username = strings.TrimSpace(username)
 	if username == "" {
-		return nil, errors.New("请输入完整账号")
+		return nil, apperrors.ErrInputCompleteAccount
 	}
 
 	var user auth.User
 	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
@@ -209,10 +209,10 @@ func (s *Service) SendFriendRequest(fromUserID string, input SendFriendRequestIn
 	}
 	toUser, err := s.lookupUser(strings.TrimSpace(input.ToUserID))
 	if err != nil {
-		return SendFriendRequestResult{}, errors.New("未找到该用户")
+		return SendFriendRequestResult{}, apperrors.ErrUserNotFound
 	}
 	if fromUser.ID == toUser.ID {
-		return SendFriendRequestResult{}, errors.New("不能添加自己")
+		return SendFriendRequestResult{}, apperrors.ErrCannotAddSelf
 	}
 	if err := s.ensureNotBlocked(fromUser.ID, toUser.ID); err != nil {
 		return SendFriendRequestResult{}, err
@@ -225,11 +225,11 @@ func (s *Service) SendFriendRequest(fromUserID string, input SendFriendRequestIn
 		if buildErr != nil {
 			return SendFriendRequestResult{}, buildErr
 		}
-		return SendFriendRequestResult{Status: RequestAccepted, User: result}, errors.New("已经是好友")
+		return SendFriendRequestResult{Status: RequestAccepted, User: result}, apperrors.ErrAlreadyFriend
 	}
 
 	if !toUser.AllowFriendRequest {
-		return SendFriendRequestResult{}, errors.New("对方暂不接受好友申请")
+		return SendFriendRequestResult{}, apperrors.ErrNotAcceptingRequests
 	}
 
 	if !toUser.RequireFriendVerify {
@@ -257,7 +257,7 @@ func (s *Service) SendFriendRequest(fromUserID string, input SendFriendRequestIn
 		}
 		return SendFriendRequestResult{Status: RequestPending, User: result}, nil
 	}
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return SendFriendRequestResult{}, err
 	}
 
@@ -295,6 +295,30 @@ func (s *Service) ListFriendRequests(userID string) ([]FriendRequestPayload, err
 		return nil, err
 	}
 
+	otherIDs := make([]string, 0, len(requests))
+	for _, request := range requests {
+		if request.ToUserID == userID {
+			otherIDs = append(otherIDs, request.FromUserID)
+		} else {
+			otherIDs = append(otherIDs, request.ToUserID)
+		}
+	}
+
+	var users []auth.User
+	if err := s.db.Where("id IN ?", otherIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	userMap := make(map[string]auth.User, len(users))
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
+	friendships, err := s.findFriendships(userID, otherIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]FriendRequestPayload, 0, len(requests))
 	for _, request := range requests {
 		direction := "sent"
@@ -304,13 +328,22 @@ func (s *Service) ListFriendRequests(userID string) ([]FriendRequestPayload, err
 			otherID = request.FromUserID
 		}
 
-		other, err := s.lookupUser(otherID)
-		if err != nil {
-			return nil, err
+		other, ok := userMap[otherID]
+		if !ok {
+			continue
 		}
-		profile, err := s.buildUserResult(userID, other)
-		if err != nil {
-			return nil, err
+
+		isFriend := false
+		if _, ok := friendships[otherID]; ok {
+			isFriend = true
+		}
+
+		profile := UserSearchResult{
+			ID:       other.ID,
+			Username: other.Username,
+			Nickname: other.Nickname,
+			Avatar:   other.Avatar,
+			IsFriend: isFriend,
 		}
 
 		payload := FriendRequestPayload{
@@ -336,13 +369,13 @@ func (s *Service) ListFriendRequests(userID string) ([]FriendRequestPayload, err
 func (s *Service) AcceptFriendRequest(userID, requestID string) (FriendItem, error) {
 	var request FriendRequest
 	if err := s.db.Where("id = ?", strings.TrimSpace(requestID)).First(&request).Error; err != nil {
-		return FriendItem{}, errors.New("好友申请不存在")
+		return FriendItem{}, apperrors.ErrFriendRequestNotFound
 	}
 	if request.ToUserID != strings.TrimSpace(userID) {
-		return FriendItem{}, errors.New("无权处理该申请")
+		return FriendItem{}, apperrors.ErrNoPermissionHandleRequest
 	}
 	if request.Status != RequestPending {
-		return FriendItem{}, errors.New("好友申请已处理")
+		return FriendItem{}, apperrors.ErrFriendRequestAlreadyHandled
 	}
 
 	fromUser, err := s.lookupUser(request.FromUserID)
@@ -369,13 +402,13 @@ func (s *Service) AcceptFriendRequest(userID, requestID string) (FriendItem, err
 func (s *Service) RejectFriendRequest(userID, requestID string) error {
 	var request FriendRequest
 	if err := s.db.Where("id = ?", strings.TrimSpace(requestID)).First(&request).Error; err != nil {
-		return errors.New("好友申请不存在")
+		return apperrors.ErrFriendRequestNotFound
 	}
 	if request.ToUserID != strings.TrimSpace(userID) {
-		return errors.New("无权处理该申请")
+		return apperrors.ErrNoPermissionHandleRequest
 	}
 	if request.Status != RequestPending {
-		return errors.New("好友申请已处理")
+		return apperrors.ErrFriendRequestAlreadyHandled
 	}
 	return s.db.Model(&request).Updates(map[string]any{"status": RequestRejected}).Error
 }
@@ -389,44 +422,63 @@ func (s *Service) ListFriends(userID string) ([]FriendItem, error) {
 		return nil, err
 	}
 
+	friendIDs := make([]string, 0, len(friendships))
+	for _, friendship := range friendships {
+		friendIDs = append(friendIDs, friendship.FriendID)
+	}
+
+	var users []auth.User
+	if err := s.db.Where("id IN ?", friendIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	userMap := make(map[string]auth.User, len(users))
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
+	reverseFriendships, err := s.findFriendshipsReverse(friendIDs, strings.TrimSpace(userID))
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]FriendItem, 0, len(friendships))
 	for _, friendship := range friendships {
-		item, err := s.friendItem(friendship)
-		if err != nil {
-			return nil, err
+		friend, ok := userMap[friendship.FriendID]
+		if !ok {
+			continue
+		}
+
+		reverse := reverseFriendships[friendship.FriendID]
+
+		item := FriendItem{
+			ID:            friendship.ID,
+			FriendID:      friend.ID,
+			Username:      friend.Username,
+			Nickname:      friend.Nickname,
+			Avatar:        friend.Avatar,
+			Gender:        normalizeGender(friend.Gender),
+			Region:        friend.Region,
+			Signature:     friend.Signature,
+			Remark:        friendship.Remark,
+			Tags:          splitTags(friendship.Tags),
+			Phone:         friendship.Phone,
+			Description:   friendship.Description,
+			Images:        splitImages(friendship.Images),
+			IsStarred:     friendship.IsStarred,
+			IsBlocked:     friendship.IsBlocked,
+			BlockedAt:     formatNullableTime(friendship.BlockedAt),
+			BlockedByPeer: reverse.IsBlocked,
+			Permission:    friendship.Permission,
+			CreatedAt:     formatTime(friendship.CreatedAt),
 		}
 		items = append(items, item)
 	}
 	return items, nil
 }
 
-func (s *Service) EnsureSystemFriend(userID string) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		return s.ensureSystemFriendTx(tx, strings.TrimSpace(userID))
-	})
-}
-
 func (s *Service) EnsureSystemFriendInTx(tx *gorm.DB, userID string) error {
 	return s.ensureSystemFriendTx(tx, strings.TrimSpace(userID))
-}
-
-func (s *Service) EnsureSystemFriendForAllUsers() error {
-	var users []auth.User
-	if err := s.db.
-		Where("id <> ?", systemFriendID).
-		Select("id").
-		Find(&users).Error; err != nil {
-		return err
-	}
-
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		for _, user := range users {
-			if err := s.ensureSystemFriendTx(tx, user.ID); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 func (s *Service) UpdateFriend(userID, friendID string, input UpdateFriendRequest) (FriendItem, error) {
@@ -435,7 +487,7 @@ func (s *Service) UpdateFriend(userID, friendID string, input UpdateFriendReques
 		return FriendItem{}, err
 	}
 	if !ok {
-		return FriendItem{}, errors.New("好友不存在")
+		return FriendItem{}, apperrors.ErrNotFound
 	}
 
 	friendship.Remark = strings.TrimSpace(input.Remark)
@@ -459,10 +511,10 @@ func (s *Service) DeleteFriend(userID, friendID string) error {
 	userID = strings.TrimSpace(userID)
 	friendID = strings.TrimSpace(friendID)
 	if userID == "" || friendID == "" {
-		return errors.New("缺少好友信息")
+		return apperrors.ErrMissingRequiredParam
 	}
 	if userID == friendID {
-		return errors.New("不能删除自己")
+		return apperrors.ErrBadRequest
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ? AND friend_id = ?", userID, friendID).Delete(&Friendship{}).Error; err != nil {
@@ -479,10 +531,10 @@ func (s *Service) BlockFriend(userID, friendID string) (FriendItem, error) {
 	userID = strings.TrimSpace(userID)
 	friendID = strings.TrimSpace(friendID)
 	if userID == "" || friendID == "" {
-		return FriendItem{}, errors.New("缺少好友信息")
+		return FriendItem{}, apperrors.ErrMissingRequiredParam
 	}
 	if userID == friendID {
-		return FriendItem{}, errors.New("不能拉黑自己")
+		return FriendItem{}, apperrors.ErrBadRequest
 	}
 
 	friendship, ok, err := s.findFriendship(userID, friendID)
@@ -490,7 +542,7 @@ func (s *Service) BlockFriend(userID, friendID string) (FriendItem, error) {
 		return FriendItem{}, err
 	}
 	if !ok {
-		return FriendItem{}, errors.New("好友不存在")
+		return FriendItem{}, apperrors.ErrNotFound
 	}
 
 	now := time.Now()
@@ -506,7 +558,7 @@ func (s *Service) UnblockFriend(userID, friendID string) (FriendItem, error) {
 	userID = strings.TrimSpace(userID)
 	friendID = strings.TrimSpace(friendID)
 	if userID == "" || friendID == "" {
-		return FriendItem{}, errors.New("缺少好友信息")
+		return FriendItem{}, apperrors.ErrMissingRequiredParam
 	}
 
 	friendship, ok, err := s.findFriendship(userID, friendID)
@@ -514,7 +566,7 @@ func (s *Service) UnblockFriend(userID, friendID string) (FriendItem, error) {
 		return FriendItem{}, err
 	}
 	if !ok {
-		return FriendItem{}, errors.New("好友不存在")
+		return FriendItem{}, apperrors.ErrNotFound
 	}
 
 	friendship.IsBlocked = false
@@ -602,7 +654,7 @@ func (s *Service) requestStatus(requesterID, targetID string, isFriend bool) (re
 		RequestPending,
 	).First(&sent).Error; err == nil {
 		return requestState{Status: RequestPending, RequestID: sent.ID}, nil
-	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	} else if err != nil && err != gorm.ErrRecordNotFound {
 		return requestState{Status: "none"}, err
 	}
 
@@ -614,7 +666,7 @@ func (s *Service) requestStatus(requesterID, targetID string, isFriend bool) (re
 		RequestPending,
 	).First(&received).Error; err == nil {
 		return requestState{Status: "received", RequestID: received.ID}, nil
-	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	} else if err != nil && err != gorm.ErrRecordNotFound {
 		return requestState{Status: "none"}, err
 	}
 
@@ -670,7 +722,7 @@ func createFriendshipPairTx(tx *gorm.DB, left, right auth.User) error {
 func (s *Service) findFriendship(userID, friendID string) (Friendship, bool, error) {
 	var friendship Friendship
 	err := s.db.Where("user_id = ? AND friend_id = ?", userID, friendID).First(&friendship).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err == gorm.ErrRecordNotFound {
 		return Friendship{}, false, nil
 	}
 	if err != nil {
@@ -679,13 +731,39 @@ func (s *Service) findFriendship(userID, friendID string) (Friendship, bool, err
 	return friendship, true, nil
 }
 
+func (s *Service) findFriendships(userID string, friendIDs []string) (map[string]Friendship, error) {
+	var friendships []Friendship
+	if err := s.db.Where("user_id = ? AND friend_id IN ?", userID, friendIDs).Find(&friendships).Error; err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]Friendship, len(friendships))
+	for _, friendship := range friendships {
+		result[friendship.FriendID] = friendship
+	}
+	return result, nil
+}
+
+func (s *Service) findFriendshipsReverse(friendIDs []string, userID string) (map[string]Friendship, error) {
+	var friendships []Friendship
+	if err := s.db.Where("user_id IN ? AND friend_id = ?", friendIDs, userID).Find(&friendships).Error; err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]Friendship, len(friendships))
+	for _, friendship := range friendships {
+		result[friendship.UserID] = friendship
+	}
+	return result, nil
+}
+
 func (s *Service) friendItemFor(userID, friendID string) (FriendItem, error) {
 	friendship, ok, err := s.findFriendship(strings.TrimSpace(userID), strings.TrimSpace(friendID))
 	if err != nil {
 		return FriendItem{}, err
 	}
 	if !ok {
-		return FriendItem{}, errors.New("好友不存在")
+		return FriendItem{}, apperrors.ErrNotFound
 	}
 	return s.friendItem(friendship)
 }
@@ -728,7 +806,7 @@ func (s *Service) ensureNotBlocked(userID, friendID string) error {
 		return err
 	}
 	if forwardOK && forward.IsBlocked {
-		return errors.New("请先将对方移出黑名单")
+		return apperrors.ErrFriendBlocked
 	}
 
 	reverse, reverseOK, err := s.findFriendship(friendID, userID)
@@ -736,17 +814,17 @@ func (s *Service) ensureNotBlocked(userID, friendID string) error {
 		return err
 	}
 	if reverseOK && reverse.IsBlocked {
-		return errors.New("对方暂时无法接收你的消息")
+		return apperrors.ErrUserNotAcceptingMessages
 	}
 	return nil
 }
 
 func (s *Service) validatePrivateMessaging(userID, friendID string) error {
 	if userID == "" || friendID == "" {
-		return errors.New("缺少好友信息")
+		return apperrors.ErrMissingRequiredParam
 	}
 	if userID == friendID {
-		return errors.New("不能与自己发起私聊")
+		return apperrors.ErrBadRequest
 	}
 
 	forward, forwardOK, err := s.findFriendship(userID, friendID)
@@ -758,32 +836,23 @@ func (s *Service) validatePrivateMessaging(userID, friendID string) error {
 		return err
 	}
 	if !forwardOK || !reverseOK {
-		return errors.New("你们已不是好友")
+		return apperrors.ErrNotFriend
 	}
 	if forward.IsBlocked {
-		return errors.New("你已将对方加入黑名单")
+		return apperrors.ErrFriendBlocked
 	}
 	if reverse.IsBlocked {
-		return errors.New("对方暂时无法接收你的消息")
+		return apperrors.ErrUserNotAcceptingMessages
 	}
 	return nil
 }
 
 func normalizeGender(value string) string {
-	switch value {
-	case "male", "female":
-		return value
-	default:
-		return "unknown"
-	}
+	return auth.SafeGender(value)
 }
 
 func (s *Service) lookupUser(userID string) (auth.User, error) {
-	var user auth.User
-	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return auth.User{}, err
-	}
-	return user, nil
+	return auth.LookupUser(s.db, userID)
 }
 
 func splitTags(value string) []string {
@@ -853,7 +922,7 @@ func joinImages(images []ContactImage) string {
 }
 
 func formatTime(value time.Time) string {
-	return value.Format("2006-01-02 15:04:05")
+	return auth.FormatTime(value)
 }
 
 func formatNullableTime(value *time.Time) string {

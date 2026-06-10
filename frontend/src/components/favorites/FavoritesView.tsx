@@ -166,7 +166,7 @@ function FavoritesDetail({
         )}
       </div>
 
-      <ImagePreviewModal open={Boolean(previewImage)} src={previewImage} onClose={() => setPreviewImage("")} />
+      <ImagePreviewModal open={Boolean(previewImage)} images={previewImage ? [previewImage] : []} currentIndex={0} onClose={() => setPreviewImage("")} />
     </>
   );
 }

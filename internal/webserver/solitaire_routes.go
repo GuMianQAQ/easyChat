@@ -2,7 +2,8 @@ package webserver
 
 import (
 	"net/http"
-	"strings"
+
+	"easyChat/internal/auth"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,14 +11,10 @@ import (
 func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 	// List solitaires by conversation
 	api.GET("/conversations/:conversationId/solitaires", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		solitaires, err := s.Store.GetSolitairesByConversation(user.ID, c.Param("conversationId"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, solitaires)
@@ -25,25 +22,18 @@ func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 
 	// Create a solitaire
 	api.POST("/conversations/:conversationId/solitaires", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
-			Title string `json:"title"`
+			Title  string `json:"title"`
+			Format string `json:"format"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil || req.Title == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
 			return
 		}
-		solitaire, err := s.Store.CreateSolitaire(user.ID, c.Param("conversationId"), req.Title)
+		solitaire, err := s.Store.CreateSolitaire(user.ID, c.Param("conversationId"), req.Title, req.Format)
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"solitaire": solitaire})
@@ -51,14 +41,10 @@ func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 
 	// Get solitaire details
 	api.GET("/solitaires/:solitaireId", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		solitaire, err := s.Store.GetSolitaire(user.ID, c.Param("solitaireId"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"solitaire": solitaire})
@@ -66,11 +52,7 @@ func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 
 	// Join solitaire
 	api.POST("/solitaires/:solitaireId/join", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			Content string `json:"content"`
 		}
@@ -79,7 +61,7 @@ func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 			return
 		}
 		if err := s.Store.JoinSolitaire(user.ID, c.Param("solitaireId"), req.Content); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -87,11 +69,7 @@ func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 
 	// Update solitaire entry
 	api.PUT("/solitaires/:solitaireId/items/:itemId", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			Content string `json:"content"`
 		}
@@ -100,7 +78,7 @@ func (s *Server) registerSolitaireRoutes(api *gin.RouterGroup) {
 			return
 		}
 		if err := s.Store.UpdateSolitaireItem(user.ID, c.Param("solitaireId"), c.Param("itemId"), req.Content); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})

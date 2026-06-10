@@ -76,12 +76,17 @@ declare global {
     isMomentsWindow: boolean;
   }
 
+  interface MyChatCapture {
+    takeScreenshot: (hideWindow: boolean) => Promise<string | null>;
+  }
+
   interface Window {
     chatRoomConfig?: ElectronRuntimeConfig;
     myChatDesktop?: boolean;
     myChatWindow?: MyChatWindowControls;
     myChatAttentionPreview?: MyChatAttentionPreview;
     myChatMoments?: MyChatMoments;
+    myChatCapture?: MyChatCapture;
   }
 }
 

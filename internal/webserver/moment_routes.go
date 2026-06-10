@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"easyChat/internal/auth"
 	"easyChat/internal/moments"
 
 	"github.com/gin-gonic/gin"
@@ -11,31 +12,24 @@ import (
 
 func (s *Server) registerMomentRoutes(api *gin.RouterGroup) {
 	api.GET("/moments/feed", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		targetUserID := strings.TrimSpace(c.Query("userId"))
 		var items []moments.MomentItem
+		var err error
 		if targetUserID == "" || targetUserID == user.ID {
 			items, err = s.Moments.GetFeed(user.ID)
 		} else {
 			items, err = s.Moments.GetProfileFeed(user.ID, targetUserID)
 		}
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"items": items})
 	})
 
 	api.POST("/moments", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req moments.CreateMomentInput
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
@@ -52,57 +46,41 @@ func (s *Server) registerMomentRoutes(api *gin.RouterGroup) {
 
 		post, err := s.Moments.CreatePost(user.ID, req)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"post": post})
 	})
 
 	api.DELETE("/moments/:id", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Moments.DeletePost(user.ID, c.Param("id")); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	api.POST("/moments/:id/like", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Moments.LikePost(user.ID, c.Param("id")); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	api.DELETE("/moments/:id/like", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Moments.UnlikePost(user.ID, c.Param("id")); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	api.POST("/moments/:id/comments", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req moments.AddCommentInput
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
@@ -110,20 +88,16 @@ func (s *Server) registerMomentRoutes(api *gin.RouterGroup) {
 		}
 		comment, err := s.Moments.AddComment(user.ID, c.Param("id"), req)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"comment": comment})
 	})
 
 	api.DELETE("/moments/comments/:id", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Moments.DeleteComment(user.ID, c.Param("id")); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})

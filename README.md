@@ -63,6 +63,17 @@
 - 修改群名称
 - 修改群头像
 - 修改群公告
+- 管理员设置与撤销
+- 转让群主
+- 禁言 / 解除禁言
+- 群权限管理
+- 置顶消息
+- 群文件中心
+- 群相册
+- 群邀请链接
+- 群投票
+- 群接龙
+- 群 AI 机器人开关
 - 普通成员退出群聊
 - 群主解散群聊
 
@@ -108,14 +119,22 @@
 easyChat
 ├── main.go                 # 后端启动入口
 ├── API.md                  # 接口文档
-├── .env.example            # AI 服务配置模板
+├── config                  # YAML 配置文件目录
+│   ├── config.yaml.example # 全局配置模板
+│   ├── auth.yaml.example   # 认证配置模板
+│   ├── ai.yaml.example     # AI 配置模板
+│   └── ...
 ├── internal
-│   ├── ai                  # AI 助手服务（对话、翻译、摘要、代码生成）
+│   ├── ai                  # AI 助手服务（对话、翻译、摘要、代码生成、语义搜索）
 │   ├── auth                # 认证与用户资料
-│   ├── chatstore           # 会话、消息、群聊、收藏、文件等核心数据逻辑
+│   ├── chatstore           # 会话、消息、群聊、收藏、文件、投票、接龙等核心数据逻辑
+│   ├── config              # Viper 配置加载（YAML + 环境变量覆盖）
 │   ├── database            # SQLite 初始化与数据库连接
+│   ├── errors              # 统一错误定义（AppError + HTTP 状态码）
+│   ├── middleware           # Gin 中间件（JWT 鉴权）
 │   ├── moments             # 朋友圈（动态、点赞、评论）
-│   ├── social              # 好友与黑名单相关逻辑
+│   ├── social              # 好友、黑名单、隐私设置
+│   ├── uid                 # 唯一 ID 生成工具
 │   ├── webchat             # WebSocket Hub 与连接管理
 │   └── webserver           # HTTP 路由、接口处理与静态资源服务
 ├── frontend
@@ -133,6 +152,8 @@ easyChat
 │   │   └── types           # TypeScript 类型定义
 │   ├── electron            # Electron 桌面端入口与打包脚本
 │   └── package.json
+├── scripts                 # 构建与测试脚本
+│   └── verify-behavior-matrix.cmd
 └── data                    # SQLite 数据库文件（运行时生成）
 ```
 
@@ -172,42 +193,81 @@ go run . -addr 127.0.0.1:8080
 data/chat.db
 ```
 
-## AI 功能配置
+## 配置说明
 
-AI 功能需要配置后端服务。复制配置模板并填入真实信息：
+项目使用 **Viper** 管理配置，支持 YAML 文件 + 环境变量覆盖。
+
+### 配置文件
+
+配置文件位于 `config/` 目录，包含以下模块：
+
+| 文件 | 说明 |
+|------|------|
+| config.yaml | 全局配置（服务器地址、CORS） |
+| auth.yaml | 认证配置（JWT 密钥、Token 有效期） |
+| ai.yaml | AI 功能配置（服务商、模型、API Key、功能开关） |
+| upload.yaml | 上传限制（图片/文件大小） |
+| websocket.yaml | WebSocket 配置（超时、消息大小） |
+
+### 快速开始
+
+首次运行时，复制配置模板并填入真实信息：
 
 ```powershell
-cp .env.example .env
+cp config/config.yaml.example config/config.yaml
+cp config/auth.yaml.example config/auth.yaml
+cp config/ai.yaml.example config/ai.yaml
 ```
 
-`.env` 文件说明：
+`config/auth.yaml` 必须配置 JWT 密钥：
 
-```text
+```yaml
+jwt:
+  secret: "your-jwt-secret-here"  # 使用强随机字符串
+  ttl: 24                          # Token 有效期（小时）
+```
+
+### AI 配置
+
+`config/ai.yaml` 说明：
+
+```yaml
 # AI 服务商：openai / ollama
-EASYCHAT_AI_PROVIDER=openai
+provider: openai
 
-# API Key
-EASYCHAT_AI_API_KEY=your-api-key-here
+# API Key（必填）
+api_key: "your-api-key-here"
 
 # 模型名称
-EASYCHAT_AI_MODEL=gpt-3.5-turbo
+model: gpt-3.5-turbo
 
 # API 地址（留空使用默认值）
-EASYCHAT_AI_BASE_URL=
+base_url: ""
 
-# 功能开关（设为 false 关闭对应功能）
-EASYCHAT_AI_ENABLE_CHAT=true
-EASYCHAT_AI_ENABLE_STREAM=true
-EASYCHAT_AI_ENABLE_TOOLS=true
-EASYCHAT_AI_ENABLE_SEARCH=true
+# 功能开关
+enable:
+  chat: true
+  stream: true
+  tools: true
+  search: true
 ```
 
 使用 Ollama 本地模型时：
 
-```text
-EASYCHAT_AI_PROVIDER=ollama
-EASYCHAT_AI_BASE_URL=http://localhost:11434/v1
-EASYCHAT_AI_MODEL=qwen2.5
+```yaml
+provider: ollama
+base_url: "http://localhost:11434/v1"
+model: qwen2.5
+```
+
+### 环境变量覆盖
+
+所有配置项均可通过环境变量覆盖，前缀为 `EASYCHAT_`，层级用下划线连接：
+
+```powershell
+EASYCHAT_SERVER_ADDR=0.0.0.0:8080
+EASYCHAT_AUTH_JWT_SECRET=your-secret
+EASYCHAT_AI_API_KEY=your-api-key
 ```
 
 AI 功能不配置时不影响其他功能正常使用。注册新账号后会自动添加 AI 好友。

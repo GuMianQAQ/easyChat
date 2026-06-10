@@ -1,10 +1,12 @@
 package chatstore
 
 import (
-	"errors"
 	"time"
 
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
+
+	"gorm.io/gorm"
 )
 
 // SolitairePayload represents a solitaire for API responses.
@@ -13,6 +15,7 @@ type SolitairePayload struct {
 	ConversationID string               `json:"conversationId"`
 	CreatorID      string               `json:"creatorId"`
 	Title          string               `json:"title"`
+	Format         string               `json:"format"`
 	CreatedAt      string               `json:"createdAt"`
 	Items          []SolitaireItemPayload `json:"items"`
 }
@@ -27,20 +30,20 @@ type SolitaireItemPayload struct {
 }
 
 // CreateSolitaire creates a new solitaire in a group conversation.
-func (s *Service) CreateSolitaire(userID, conversationID, title string) (*SolitairePayload, error) {
+func (s *Service) CreateSolitaire(userID, conversationID, title, format string) (*SolitairePayload, error) {
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {
 		return nil, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, errors.New("当前会话不是群聊")
+		return nil, apperrors.ErrNotGroupConversation
 	}
 
 	// Check permission
 	if allowed, err := s.CheckPermission(userID, conversationID, "who_can_create_solitaire"); err != nil {
 		return nil, err
 	} else if !allowed {
-		return nil, errors.New("只有管理员可以发起接龙")
+		return nil, apperrors.ErrOnlyAdminCanSolitaire
 	}
 
 	solitaire := Solitaire{
@@ -48,6 +51,7 @@ func (s *Service) CreateSolitaire(userID, conversationID, title string) (*Solita
 		ConversationID: conversationID,
 		CreatorID:      userID,
 		Title:          title,
+		Format:         format,
 		CreatedAt:      time.Now(),
 	}
 
@@ -60,6 +64,7 @@ func (s *Service) CreateSolitaire(userID, conversationID, title string) (*Solita
 		ConversationID: solitaire.ConversationID,
 		CreatorID:      solitaire.CreatorID,
 		Title:          solitaire.Title,
+		Format:         solitaire.Format,
 		CreatedAt:      formatTime(solitaire.CreatedAt),
 		Items:          []SolitaireItemPayload{},
 	}, nil
@@ -69,7 +74,7 @@ func (s *Service) CreateSolitaire(userID, conversationID, title string) (*Solita
 func (s *Service) JoinSolitaire(userID, solitaireID, content string) error {
 	var solitaire Solitaire
 	if err := s.db.Where("id = ?", solitaireID).First(&solitaire).Error; err != nil {
-		return errors.New("接龙不存在")
+		return apperrors.ErrSolitaireNotFound
 	}
 
 	// Verify user is in the conversation
@@ -77,38 +82,41 @@ func (s *Service) JoinSolitaire(userID, solitaireID, content string) error {
 		return err
 	}
 
-	// Check if already joined
-	var existing SolitaireItem
-	if err := s.db.Where("solitaire_id = ? AND user_id = ?", solitaireID, userID).First(&existing).Error; err == nil {
-		// Already joined, update content
-		return s.db.Model(&existing).Update("content", content).Error
-	}
+	// Use transaction to prevent race conditions
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Check if already joined
+		var existing SolitaireItem
+		if err := tx.Where("solitaire_id = ? AND user_id = ?", solitaireID, userID).First(&existing).Error; err == nil {
+			// Already joined, update content
+			return tx.Model(&existing).Update("content", content).Error
+		}
 
-	// Get next sort order
-	var maxOrder int
-	s.db.Model(&SolitaireItem{}).Where("solitaire_id = ?", solitaireID).
-		Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
+		// Get next sort order
+		var maxOrder int
+		tx.Model(&SolitaireItem{}).Where("solitaire_id = ?", solitaireID).
+			Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
 
-	item := SolitaireItem{
-		ID:          uid.New("item"),
-		SolitaireID: solitaireID,
-		UserID:      userID,
-		Content:     content,
-		SortOrder:   maxOrder + 1,
-		CreatedAt:   time.Now(),
-	}
-	return s.db.Create(&item).Error
+		item := SolitaireItem{
+			ID:          uid.New("item"),
+			SolitaireID: solitaireID,
+			UserID:      userID,
+			Content:     content,
+			SortOrder:   maxOrder + 1,
+			CreatedAt:   time.Now(),
+		}
+		return tx.Create(&item).Error
+	})
 }
 
 // UpdateSolitaireItem updates a solitaire entry. Only the owner of the entry can update.
 func (s *Service) UpdateSolitaireItem(userID, solitaireID, itemID, content string) error {
 	var item SolitaireItem
 	if err := s.db.Where("id = ? AND solitaire_id = ?", itemID, solitaireID).First(&item).Error; err != nil {
-		return errors.New("接龙条目不存在")
+		return apperrors.ErrSolitaireItemNotFound
 	}
 
 	if item.UserID != userID {
-		return errors.New("只能修改自己的接龙内容")
+		return apperrors.ErrCanOnlyModifySelf
 	}
 
 	return s.db.Model(&item).Update("content", content).Error
@@ -118,7 +126,7 @@ func (s *Service) UpdateSolitaireItem(userID, solitaireID, itemID, content strin
 func (s *Service) GetSolitaire(userID, solitaireID string) (*SolitairePayload, error) {
 	var solitaire Solitaire
 	if err := s.db.Where("id = ?", solitaireID).First(&solitaire).Error; err != nil {
-		return nil, errors.New("接龙不存在")
+		return nil, apperrors.ErrSolitaireNotFound
 	}
 
 	// Verify user is in the conversation
@@ -137,6 +145,7 @@ func (s *Service) GetSolitaire(userID, solitaireID string) (*SolitairePayload, e
 		ConversationID: solitaire.ConversationID,
 		CreatorID:      solitaire.CreatorID,
 		Title:          solitaire.Title,
+		Format:         solitaire.Format,
 		CreatedAt:      formatTime(solitaire.CreatedAt),
 		Items:          make([]SolitaireItemPayload, 0, len(items)),
 	}
@@ -187,6 +196,7 @@ func (s *Service) GetSolitairesByConversation(userID, conversationID string) ([]
 			ConversationID: sol.ConversationID,
 			CreatorID:      sol.CreatorID,
 			Title:          sol.Title,
+			Format:         sol.Format,
 			CreatedAt:      formatTime(sol.CreatedAt),
 			Items:          make([]SolitaireItemPayload, 0),
 		}

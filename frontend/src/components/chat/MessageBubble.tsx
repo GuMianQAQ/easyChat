@@ -1,8 +1,9 @@
 import type { MouseEvent, ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
+import { File, RefreshCw } from "lucide-react";
 import type { ChatMessage, GroupMemberItem } from "../../types/chat";
 import { formatTimeLabel } from "../../utils/time";
 import { segmentsForDisplay } from "../../utils/mentions";
+import { resolveMediaUrl } from "../../config/env";
 import Avatar from "../common/Avatar";
 
 function summarizeQuote(message: ChatMessage) {
@@ -47,8 +48,31 @@ function MessageBubble({
     if (message.messageType === "image" && !message.revoked) {
       return (
         <button type="button" className="message-image-button" onClick={() => onPreviewImage(message)}>
-          <img className="message-image" src={message.content} alt="图片消息" />
+          <img className="message-image" src={resolveMediaUrl(message.content)} alt="图片消息" />
         </button>
+      );
+    }
+
+    if (message.messageType === "file" && !message.revoked) {
+      const fileUrl = resolveMediaUrl(message.content);
+      const fileName = message.content.split("/").pop() || "文件";
+      return (
+        <div className="message-file">
+          <div className="message-file-icon">
+            <File size={24} />
+          </div>
+          <div className="message-file-info">
+            <div className="message-file-name" title={fileName}>{fileName}</div>
+          </div>
+          <a
+            href={fileUrl}
+            download={fileName}
+            className="message-file-download"
+            onClick={(e) => e.stopPropagation()}
+          >
+            下载
+          </a>
+        </div>
       );
     }
 

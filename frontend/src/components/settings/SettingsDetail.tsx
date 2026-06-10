@@ -120,7 +120,7 @@ export default function SettingsDetail({
   };
 
   const updateBoolean = (
-    key: "rememberProfile" | "clearAfterSend" | "enterToSend" | "aiSearchEnabled" | "inputCompletion" | "questionPrediction",
+    key: "rememberProfile" | "clearAfterSend" | "enterToSend" | "hideWindowOnCapture" | "aiSearchEnabled" | "inputCompletion" | "questionPrediction",
     value: boolean,
   ) => {
     onSettingsChange((previous) => ({ ...previous, [key]: value }));
@@ -573,6 +573,17 @@ export default function SettingsDetail({
                 checked={settings.enterToSend}
                 onChange={(value) => updateBoolean("enterToSend", value)}
                 label="Enter 发送"
+              />
+            }
+          />
+          <SettingsRow
+            label="隐藏窗口截图"
+            description="截图前自动隐藏窗口，可截取被遮挡内容"
+            control={
+              <Switch
+                checked={settings.hideWindowOnCapture}
+                onChange={(value) => updateBoolean("hideWindowOnCapture", value)}
+                label="隐藏窗口截图"
               />
             }
           />

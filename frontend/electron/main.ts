@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen } from "electron";
+﻿import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, Tray, nativeImage, screen } from "electron";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -953,6 +953,391 @@ ipcMain.handle("mychat-attention:hover", (_event, hovered: boolean) => {
     return;
   }
   scheduleHideAttentionPreview();
+});
+
+let screenSelectorWindow: BrowserWindow | null = null;
+let screenSelectorResolve: ((value: string | null) => void) | null = null;
+let cachedScreenDataUrl: string | null = null;
+
+function handleConfirmRegion(rect: { x: number; y: number; w: number; h: number }) {
+  if (!screenSelectorResolve) return;
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const scaleFactor = primaryDisplay.scaleFactor;
+
+  if (!cachedScreenDataUrl) {
+    screenSelectorResolve(null);
+    screenSelectorResolve = null;
+    screenSelectorWindow?.close();
+    return;
+  }
+
+  try {
+    const image = nativeImage.createFromDataURL(cachedScreenDataUrl);
+    const cropped = image.crop({
+      x: Math.round(rect.x * scaleFactor),
+      y: Math.round(rect.y * scaleFactor),
+      width: Math.round(rect.w * scaleFactor),
+      height: Math.round(rect.h * scaleFactor),
+    });
+
+    screenSelectorResolve(cropped.toDataURL());
+  } catch (error) {
+    console.error("crop failed", error);
+    screenSelectorResolve(null);
+  }
+
+  screenSelectorResolve = null;
+  cachedScreenDataUrl = null;
+  screenSelectorWindow?.close();
+}
+
+function handleCancelSelector() {
+  if (screenSelectorResolve) {
+    screenSelectorResolve(null);
+    screenSelectorResolve = null;
+  }
+  cachedScreenDataUrl = null;
+  screenSelectorWindow?.close();
+}
+
+async function captureScreen(): Promise<string> {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.size;
+  const scaleFactor = primaryDisplay.scaleFactor;
+
+  const sources = await desktopCapturer.getSources({
+    types: ["screen"],
+    thumbnailSize: { width: width * scaleFactor, height: height * scaleFactor },
+  });
+
+  if (sources.length === 0) {
+    throw new Error("无法获取屏幕");
+  }
+
+  return sources[0].thumbnail.toDataURL();
+}
+
+function createScreenSelectorWindow(screenDataUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    screenSelectorResolve = resolve;
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.bounds;
+
+    screenSelectorWindow = new BrowserWindow({
+      width,
+      height,
+      x: primaryDisplay.bounds.x,
+      y: primaryDisplay.bounds.y,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      closable: false,
+      focusable: true,
+      show: false,
+      webPreferences: {
+        contextIsolation: false,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    });
+
+    const html = buildScreenSelectorHtml(screenDataUrl);
+
+    screenSelectorWindow.on("closed", () => {
+      screenSelectorWindow = null;
+      cachedScreenDataUrl = null;
+      if (screenSelectorResolve) {
+        screenSelectorResolve(null);
+        screenSelectorResolve = null;
+      }
+    });
+
+    screenSelectorWindow.webContents.on("ipc-message", (_event, channel, ...args) => {
+      if (channel === "selector:confirm") {
+        const rect = args[0] as { x: number; y: number; w: number; h: number };
+        handleConfirmRegion(rect);
+      } else if (channel === "selector:cancel") {
+        handleCancelSelector();
+      }
+    });
+
+    screenSelectorWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`).catch((error) => {
+      console.error("failed to load screen selector", error);
+      resolve(null);
+    });
+
+    screenSelectorWindow.once("ready-to-show", () => {
+      screenSelectorWindow?.show();
+      screenSelectorWindow?.focus();
+    });
+  });
+}
+
+function buildScreenSelectorHtml(screenDataUrl: string) {
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Screen Selector</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        cursor: crosshair;
+        user-select: none;
+      }
+      body {
+        background: url('${screenDataUrl}') no-repeat center center / cover;
+      }
+      .overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+      }
+      .selection {
+        position: fixed;
+        border: 2px solid #4e6ef2;
+        background: transparent;
+        display: none;
+      }
+      .selection-content {
+        width: 100%;
+        height: 100%;
+        background: url('${screenDataUrl}') no-repeat center center / cover;
+      }
+      .toolbar {
+        position: fixed;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: none;
+        gap: 12px;
+        z-index: 10;
+      }
+      .toolbar button {
+        padding: 8px 24px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        color: #fff;
+      }
+      .btn-confirm { background: #4e6ef2; }
+      .btn-confirm:hover { background: #3d5bd6; }
+      .btn-cancel { background: rgba(255,255,255,0.2); }
+      .btn-cancel:hover { background: rgba(255,255,255,0.3); }
+      .size-hint {
+        position: fixed;
+        background: rgba(0,0,0,0.7);
+        color: #fff;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        display: none;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="overlay" id="overlay"></div>
+    <div class="selection" id="selection">
+      <div class="selection-content" id="selectionContent"></div>
+    </div>
+    <div class="toolbar" id="toolbar">
+      <button class="btn-confirm" id="btnConfirm">确认</button>
+      <button class="btn-cancel" id="btnCancel">取消</button>
+    </div>
+    <div class="size-hint" id="sizeHint"></div>
+    <script>
+      const overlay = document.getElementById('overlay');
+      const selection = document.getElementById('selection');
+      const selectionContent = document.getElementById('selectionContent');
+      const toolbar = document.getElementById('toolbar');
+      const sizeHint = document.getElementById('sizeHint');
+      const btnConfirm = document.getElementById('btnConfirm');
+      const btnCancel = document.getElementById('btnCancel');
+
+      let selecting = false;
+      let startX = 0, startY = 0;
+      let endX = 0, endY = 0;
+
+      function getRect() {
+        const x = Math.min(startX, endX);
+        const y = Math.min(startY, endY);
+        const w = Math.abs(endX - startX);
+        const h = Math.abs(endY - startY);
+        return { x, y, w, h };
+      }
+
+      function updateSelection() {
+        const { x, y, w, h } = getRect();
+        if (w > 0 && h > 0) {
+          selection.style.display = 'block';
+          selection.style.left = x + 'px';
+          selection.style.top = y + 'px';
+          selection.style.width = w + 'px';
+          selection.style.height = h + 'px';
+          selectionContent.style.backgroundPosition = -x + 'px ' + -y + 'px';
+          overlay.style.clipPath = 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ' +
+            x + 'px ' + y + 'px, ' + x + 'px ' + (y + h) + 'px, ' + (x + w) + 'px ' + (y + h) + 'px, ' +
+            (x + w) + 'px ' + y + 'px, ' + x + 'px ' + y + 'px)';
+          sizeHint.style.display = 'block';
+          sizeHint.style.left = (x + w + 8) + 'px';
+          sizeHint.style.top = (y + 8) + 'px';
+          sizeHint.textContent = w + ' x ' + h;
+        }
+      }
+
+      function showToolbar() {
+        const { x, y, h } = getRect();
+        toolbar.style.display = 'flex';
+        toolbar.style.left = x + 'px';
+        toolbar.style.top = (y + h + 12) + 'px';
+      }
+
+      function hideToolbar() {
+        toolbar.style.display = 'none';
+      }
+
+      document.addEventListener('mousedown', (e) => {
+        if (e.target === btnConfirm || e.target === btnCancel) return;
+        selecting = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        endX = e.clientX;
+        endY = e.clientY;
+        selection.style.display = 'none';
+        hideToolbar();
+        sizeHint.style.display = 'none';
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!selecting) return;
+        endX = e.clientX;
+        endY = e.clientY;
+        updateSelection();
+      });
+
+      document.addEventListener('mouseup', (e) => {
+        if (!selecting) return;
+        selecting = false;
+        const { w, h } = getRect();
+        if (w > 5 && h > 5) {
+          showToolbar();
+        }
+      });
+
+      document.addEventListener('dblclick', (e) => {
+        if (e.target === btnConfirm || e.target === btnCancel) return;
+        const { w, h } = getRect();
+        if (w > 5 && h > 5) {
+          confirmSelection();
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          require('electron').ipcRenderer.send('selector:cancel');
+        } else if (e.key === 'Enter') {
+          const { w, h } = getRect();
+          if (w > 5 && h > 5) {
+            confirmSelection();
+          }
+        }
+      });
+
+      function confirmSelection() {
+        const rect = getRect();
+        require('electron').ipcRenderer.send('selector:confirm', rect);
+      }
+
+      btnConfirm.addEventListener('click', () => {
+        confirmSelection();
+      });
+
+      btnCancel.addEventListener('click', () => {
+        require('electron').ipcRenderer.send('selector:cancel');
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+ipcMain.handle("mychat-capture:screenshot", async (_event, hideWindow: boolean) => {
+  try {
+    if (hideWindow && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.hide();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+
+    cachedScreenDataUrl = await captureScreen();
+    const selectedRegion = await createScreenSelectorWindow(cachedScreenDataUrl);
+
+    if (hideWindow && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+
+    return selectedRegion;
+  } catch (error) {
+    console.error("screenshot failed", error);
+    cachedScreenDataUrl = null;
+    if (hideWindow && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    throw error;
+  }
+});
+
+ipcMain.handle("mychat-capture:confirm-region", (_event, rect: { x: number; y: number; w: number; h: number }) => {
+  if (!screenSelectorResolve) return;
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const scaleFactor = primaryDisplay.scaleFactor;
+
+  if (!cachedScreenDataUrl) {
+    screenSelectorResolve(null);
+    screenSelectorResolve = null;
+    screenSelectorWindow?.close();
+    return;
+  }
+
+  try {
+    const image = nativeImage.createFromDataURL(cachedScreenDataUrl);
+    const cropped = image.crop({
+      x: Math.round(rect.x * scaleFactor),
+      y: Math.round(rect.y * scaleFactor),
+      width: Math.round(rect.w * scaleFactor),
+      height: Math.round(rect.h * scaleFactor),
+    });
+
+    screenSelectorResolve(cropped.toDataURL());
+  } catch (error) {
+    console.error("crop failed", error);
+    screenSelectorResolve(null);
+  }
+
+  screenSelectorResolve = null;
+  cachedScreenDataUrl = null;
+  screenSelectorWindow?.close();
+});
+
+ipcMain.handle("mychat-capture:cancel-selector", () => {
+  if (screenSelectorResolve) {
+    screenSelectorResolve(null);
+    screenSelectorResolve = null;
+  }
+  cachedScreenDataUrl = null;
+  screenSelectorWindow?.close();
 });
 
 app.setAppUserModelId("com.mychat.desktop");

@@ -1,7 +1,6 @@
 package chatstore
 
 import (
-	"errors"
 	"io"
 	"mime/multipart"
 	"os"
@@ -10,18 +9,19 @@ import (
 	"time"
 
 	"easyChat/internal/auth"
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 )
 
 func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 	if file == nil {
-		return "", errors.New("缺少图片")
+		return "", apperrors.ErrBadRequest
 	}
 	if file.Size > s.config.MaxImageBytes {
-		return "", errors.New("图片超过 2MB")
+		return "", apperrors.ErrImageTooLarge
 	}
 	if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
-		return "", errors.New("仅支持图片")
+		return "", apperrors.ErrBadRequest
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))
@@ -37,10 +37,10 @@ func (s *Service) StoreUpload(file *multipart.FileHeader) (string, error) {
 
 func (s *Service) StoreGenericUpload(user auth.PublicUser, file *multipart.FileHeader) (FilePayload, error) {
 	if file == nil {
-		return FilePayload{}, errors.New("请上传文件")
+		return FilePayload{}, apperrors.ErrPleaseUploadFile
 	}
 	if file.Size > s.config.MaxFileBytes {
-		return FilePayload{}, errors.New("文件超过 10MB")
+		return FilePayload{}, apperrors.ErrFileTooLarge
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))

@@ -11,11 +11,7 @@ import (
 )
 
 func (s *Service) lookupUser(userID string) (auth.User, error) {
-	var user auth.User
-	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
-		return auth.User{}, err
-	}
-	return user, nil
+	return auth.LookupUser(s.db, userID)
 }
 
 func StablePrivateConversationID(leftUserID, rightUserID string) string {
@@ -25,7 +21,7 @@ func StablePrivateConversationID(leftUserID, rightUserID string) string {
 }
 
 func formatTime(value time.Time) string {
-	return value.Format("2006-01-02 15:04:05")
+	return auth.FormatTime(value)
 }
 
 func normalizeID(id string) string {

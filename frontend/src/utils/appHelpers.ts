@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   rememberProfile: true,
   clearAfterSend: true,
   enterToSend: true,
+  hideWindowOnCapture: false,
   aiSearchEnabled: false,
   inputCompletion: false,
   completionGranularity: "simple",

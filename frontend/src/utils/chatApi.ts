@@ -8,9 +8,10 @@ import type {
   UploadedFileItem,
   PinnedMessage,
   GroupFileItem,
-  GroupInviteLink,
   Vote,
   Solitaire,
+  Album,
+  AlbumPhoto,
 } from "../types/chat";
 import { createApiError } from "./apiError";
 import { resolveApiUrl } from "../config/env";
@@ -425,29 +426,6 @@ export async function getGroupImages(token: string, conversationId: string, page
   });
 }
 
-export async function generateInviteLink(token: string, conversationId: string, expiresIn: string, maxUses: number): Promise<GroupInviteLink> {
-  const response = await requestJSON<{ invite: GroupInviteLink }>(`/api/conversations/${conversationId}/group/invites`, {
-    method: "POST",
-    headers: authHeaders(token, { "Content-Type": "application/json" }),
-    body: JSON.stringify({ expiresIn, maxUses }),
-  });
-  return response.invite;
-}
-
-export async function listInviteLinks(token: string, conversationId: string): Promise<GroupInviteLink[]> {
-  const response = await requestJSON<{ invites: GroupInviteLink[] }>(`/api/conversations/${conversationId}/group/invites`, {
-    headers: authHeaders(token),
-  });
-  return response.invites;
-}
-
-export async function deleteInviteLink(token: string, conversationId: string, inviteId: string): Promise<void> {
-  await requestJSON(`/api/conversations/${conversationId}/group/invites/${inviteId}`, {
-    method: "DELETE",
-    headers: authHeaders(token),
-  });
-}
-
 export async function joinByInviteCode(token: string, code: string): Promise<ConversationPayload> {
   const response = await requestJSON<{ conversation: ConversationPayload }>(`/api/conversations/group/join/${code}`, {
     method: "POST",
@@ -456,11 +434,20 @@ export async function joinByInviteCode(token: string, code: string): Promise<Con
   return response.conversation;
 }
 
-export async function createVote(token: string, conversationId: string, question: string, options: string[], allowMulti: boolean, anonymous: boolean, deadline?: string): Promise<Vote> {
+export async function addGroupMembers(token: string, conversationId: string, userIds: string[]): Promise<string[]> {
+  const response = await requestJSON<{ added: string[] }>(`/api/conversations/${conversationId}/group/members`, {
+    method: "POST",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ userIds }),
+  });
+  return response.added;
+}
+
+export async function createVote(token: string, conversationId: string, question: string, options: string[], anonymous: boolean, deadline?: string, voteType?: string): Promise<Vote> {
   const response = await requestJSON<{ vote: Vote }>(`/api/conversations/${conversationId}/votes`, {
     method: "POST",
     headers: authHeaders(token, { "Content-Type": "application/json" }),
-    body: JSON.stringify({ question, options, allowMulti, anonymous, deadline }),
+    body: JSON.stringify({ question, options, anonymous, deadline, voteType: voteType || "single" }),
   });
   return response.vote;
 }
@@ -487,11 +474,11 @@ export async function unvote(token: string, voteId: string): Promise<void> {
   });
 }
 
-export async function createSolitaire(token: string, conversationId: string, title: string): Promise<Solitaire> {
+export async function createSolitaire(token: string, conversationId: string, title: string, format?: string): Promise<Solitaire> {
   const response = await requestJSON<{ solitaire: Solitaire }>(`/api/conversations/${conversationId}/solitaires`, {
     method: "POST",
     headers: authHeaders(token, { "Content-Type": "application/json" }),
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, format: format || "" }),
   });
   return response.solitaire;
 }
@@ -527,6 +514,92 @@ export async function fetchGroupVotes(token: string, conversationId: string): Pr
 
 export async function fetchGroupSolitaires(token: string, conversationId: string): Promise<Solitaire[]> {
   return requestJSON(`/api/conversations/${conversationId}/solitaires`, {
+    headers: authHeaders(token),
+  });
+}
+
+// Album API functions
+export async function createGroupAlbum(token: string, conversationId: string, name: string, description: string): Promise<Album> {
+  const response = await requestJSON<{ album: Album }>(`/api/conversations/${conversationId}/albums`, {
+    method: "POST",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ name, description }),
+  });
+  return response.album;
+}
+
+export async function getGroupAlbums(token: string, conversationId: string, page = 1, pageSize = 20): Promise<{ albums: Album[]; total: number }> {
+  return requestJSON(`/api/conversations/${conversationId}/albums?page=${page}&pageSize=${pageSize}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getGroupAlbum(token: string, conversationId: string, albumId: string): Promise<Album> {
+  const response = await requestJSON<{ album: Album }>(`/api/conversations/${conversationId}/albums/${albumId}`, {
+    headers: authHeaders(token),
+  });
+  return response.album;
+}
+
+export async function updateGroupAlbum(token: string, conversationId: string, albumId: string, name: string, description: string): Promise<Album> {
+  const response = await requestJSON<{ album: Album }>(`/api/conversations/${conversationId}/albums/${albumId}`, {
+    method: "PUT",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ name, description }),
+  });
+  return response.album;
+}
+
+export async function deleteGroupAlbum(token: string, conversationId: string, albumId: string): Promise<void> {
+  await requestJSON(`/api/conversations/${conversationId}/albums/${albumId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function uploadAlbumPhoto(token: string, conversationId: string, albumId: string, file: File): Promise<AlbumPhoto> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await requestJSON<{ photo: AlbumPhoto }>(`/api/conversations/${conversationId}/albums/${albumId}/photos`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  return response.photo;
+}
+
+export async function getAlbumPhotos(token: string, conversationId: string, albumId: string, page = 1, pageSize = 20): Promise<{ photos: AlbumPhoto[]; total: number }> {
+  return requestJSON(`/api/conversations/${conversationId}/albums/${albumId}/photos?page=${page}&pageSize=${pageSize}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function deleteAlbumPhoto(token: string, conversationId: string, albumId: string, photoId: string): Promise<void> {
+  await requestJSON(`/api/conversations/${conversationId}/albums/${albumId}/photos/${photoId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function batchDeleteAlbumPhotos(token: string, conversationId: string, albumId: string, photoIds: string[]): Promise<void> {
+  await requestJSON(`/api/conversations/${conversationId}/albums/${albumId}/photos/batch-delete`, {
+    method: "POST",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ photoIds }),
+  });
+}
+
+export async function getAllAlbumPhotos(token: string, conversationId: string, page = 1, pageSize = 20): Promise<{ photos: AlbumPhoto[]; total: number }> {
+  return requestJSON(`/api/conversations/${conversationId}/album-photos?page=${page}&pageSize=${pageSize}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getMyAlbumPhotos(token: string, conversationId: string, page = 1, pageSize = 20): Promise<{ photos: AlbumPhoto[]; total: number }> {
+  return requestJSON(`/api/conversations/${conversationId}/album-photos/mine?page=${page}&pageSize=${pageSize}`, {
     headers: authHeaders(token),
   });
 }

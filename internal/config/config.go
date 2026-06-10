@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,11 +96,6 @@ func Load() (*AppConfig, error) {
 	}
 
 	convertTypes(&cfg)
-
-	log.Printf("config loaded: server=%s, ai.provider=%s, ai.model=%s, auth.jwt.secret=%s, auth.jwt.ttl=%v, upload.max_image_mb=%d, upload.max_file_mb=%d, websocket.write_timeout=%v, websocket.pong_timeout=%v, websocket.max_message_mb=%d",
-		cfg.Server.Addr, cfg.AI.Provider, cfg.AI.Model, cfg.Auth.JWT.Secret, cfg.Auth.JWT.TTL,
-		cfg.Upload.MaxImageBytes/1024/1024, cfg.Upload.MaxFileBytes/1024/1024,
-		cfg.WebSocket.WriteTimeout, cfg.WebSocket.PongTimeout, cfg.WebSocket.MaxMessageSize/1024/1024)
 
 	return &cfg, nil
 }

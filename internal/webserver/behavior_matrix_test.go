@@ -69,6 +69,7 @@ func newAPITestEnv(t *testing.T) *apiTestEnv {
 		uploadsDir:      filepath.Join(t.TempDir(), "uploads"),
 	}
 	router := gin.New()
+	router.Use(ErrorHandler())
 	server.registerAPIRoutes(router)
 
 	t.Cleanup(func() {
@@ -234,7 +235,7 @@ func TestProtectedRoutesRequireValidAuthentication(t *testing.T) {
 		method string
 		path   string
 	}{
-		{method: http.MethodGet, path: "/api/auth/me"},
+		{method: http.MethodGet, path: "/api/users/me/profile"},
 		{method: http.MethodGet, path: "/api/conversations"},
 		{method: http.MethodGet, path: "/api/friend-requests"},
 	}

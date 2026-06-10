@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Image, Archive, Download, Search, Filter } from "lucide-react";
+import { FileText, Image, Archive, Download, Search, Filter, File } from "lucide-react";
 import type { GroupFileItem } from "../../types/chat";
 import { getGroupFiles } from "../../utils/chatApi";
 
@@ -55,15 +55,43 @@ export default function GroupFileManager({ token, conversationId, onNotice }: Gr
   };
 
   const getFileIcon = (mimeType: string) => {
-    if (mimeType.startsWith("image/")) return <Image size={16} />;
-    if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("7z")) return <Archive size={16} />;
-    return <FileText size={16} />;
+    if (mimeType.startsWith("image/")) return <Image size={18} />;
+    if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("7z")) return <Archive size={18} />;
+    if (mimeType.includes("pdf") || mimeType.includes("doc") || mimeType.includes("xls") || mimeType.includes("txt")) return <FileText size={18} />;
+    return <File size={18} />;
+  };
+
+  const getFileIconClass = (mimeType: string) => {
+    if (mimeType.startsWith("image/")) return "file-icon-image";
+    if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("7z")) return "file-icon-archive";
+    if (mimeType.includes("pdf") || mimeType.includes("doc") || mimeType.includes("xls") || mimeType.includes("txt")) return "file-icon-document";
+    return "file-icon-other";
   };
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const fileDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (fileDate.getTime() === today.getTime()) {
+      return `今天 ${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+    }
+    if (fileDate.getTime() === yesterday.getTime()) {
+      return `昨天 ${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+    }
+    const diffDays = Math.floor((today.getTime() - fileDate.getTime()) / (24 * 60 * 60 * 1000));
+    if (diffDays < 7) {
+      return `${diffDays}天前`;
+    }
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
   };
 
   return (
@@ -97,10 +125,17 @@ export default function GroupFileManager({ token, conversationId, onNotice }: Gr
       </div>
 
       {loading ? (
-        <div className="file-loading">加载中...</div>
+        <div className="file-loading">
+          <div className="file-empty-icon">
+            <FileText size={36} />
+          </div>
+          <p>加载中...</p>
+        </div>
       ) : files.length === 0 ? (
         <div className="file-empty">
-          <FileText size={32} />
+          <div className="file-empty-icon">
+            <FileText size={36} />
+          </div>
           <p>暂无文件</p>
         </div>
       ) : (
@@ -108,11 +143,13 @@ export default function GroupFileManager({ token, conversationId, onNotice }: Gr
           <div className="file-list">
             {files.map((file) => (
               <div key={file.id} className="file-item">
-                <div className="file-icon">{getFileIcon(file.mimeType)}</div>
+                <div className={`file-icon ${getFileIconClass(file.mimeType)}`}>
+                  {getFileIcon(file.mimeType)}
+                </div>
                 <div className="file-info">
                   <div className="file-name">{file.fileName}</div>
                   <div className="file-meta">
-                    {formatSize(file.fileSize)} · {file.createdAt}
+                    {formatSize(file.fileSize)} · {file.senderName} · {formatTime(file.createdAt)}
                   </div>
                 </div>
                 <button

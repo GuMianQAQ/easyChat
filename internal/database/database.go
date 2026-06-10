@@ -52,6 +52,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&chatstore.VoteRecord{},
 		&chatstore.Solitaire{},
 		&chatstore.SolitaireItem{},
+		&chatstore.Album{},
+		&chatstore.AlbumPhoto{},
 		&moments.Moment{},
 		&moments.MomentLike{},
 		&moments.MomentComment{},

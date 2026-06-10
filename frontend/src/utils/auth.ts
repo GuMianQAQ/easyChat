@@ -77,7 +77,7 @@ export function register(payload: {
 }
 
 export async function fetchCurrentUser(token: string): Promise<CurrentUser> {
-  const response = await requestJSON<{ user: CurrentUser }>("/api/users/me", {
+  const response = await requestJSON<{ user: CurrentUser }>("/api/users/me/profile", {
     headers: { Authorization: `Bearer ${token}` },
   });
   return response.user;

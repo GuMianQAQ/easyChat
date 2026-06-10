@@ -1,3 +1,4 @@
+// 主程序入口文件
 package main
 
 import (

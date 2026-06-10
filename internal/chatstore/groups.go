@@ -2,13 +2,15 @@ package chatstore
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 
+	"easyChat/internal/auth"
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const groupBotUserID = "ai-assistant"
@@ -19,14 +21,14 @@ func (s *Service) GetGroupConversation(userID, conversationID string) (GroupConv
 		return GroupConversationPayload{}, err
 	}
 	if conversation.Type != GroupConversationType {
-		return GroupConversationPayload{}, errors.New("当前会话不是群聊")
+		return GroupConversationPayload{}, apperrors.ErrNotGroupConversation
 	}
 	member, err := s.memberRecord(userID, conversationID)
 	if err != nil {
 		return GroupConversationPayload{}, err
 	}
 	if member == nil {
-		return GroupConversationPayload{}, errors.New("当前用户不在该群聊中")
+		return GroupConversationPayload{}, apperrors.ErrUserNotInGroup
 	}
 
 	var records []ConversationMember
@@ -34,11 +36,26 @@ func (s *Service) GetGroupConversation(userID, conversationID string) (GroupConv
 		return GroupConversationPayload{}, err
 	}
 
+	userIDs := make([]string, 0, len(records))
+	for _, record := range records {
+		userIDs = append(userIDs, record.UserID)
+	}
+
+	var users []auth.User
+	if err := s.db.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+		return GroupConversationPayload{}, err
+	}
+
+	userMap := make(map[string]auth.User, len(users))
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
 	items := make([]GroupMemberPayload, 0, len(records))
 	for _, record := range records {
-		user, err := s.lookupUser(record.UserID)
-		if err != nil {
-			return GroupConversationPayload{}, err
+		user, ok := userMap[record.UserID]
+		if !ok {
+			continue
 		}
 		payload := GroupMemberPayload{
 			UserID:        user.ID,
@@ -78,35 +95,35 @@ func (s *Service) UpdateGroupConversation(userID, conversationID string, input U
 		return GroupConversationPayload{}, err
 	}
 	if conversation.Type != GroupConversationType {
-		return GroupConversationPayload{}, errors.New("当前会话不是群聊")
+		return GroupConversationPayload{}, apperrors.ErrNotGroupConversation
 	}
 	member, err := s.memberRecord(userID, conversationID)
 	if err != nil {
 		return GroupConversationPayload{}, err
 	}
 	if member == nil {
-		return GroupConversationPayload{}, errors.New("当前用户不在该群聊中")
+		return GroupConversationPayload{}, apperrors.ErrUserNotInGroup
 	}
 
 	if input.Avatar != nil {
 		if allowed, err := s.CheckPermission(userID, conversationID, "who_can_change_avatar"); err != nil {
 			return GroupConversationPayload{}, err
 		} else if !allowed {
-			return GroupConversationPayload{}, errors.New("只有管理员可以修改群头像")
+			return GroupConversationPayload{}, apperrors.ErrOnlyAdminCanChangeAvatar
 		}
 	}
 	if input.Name != nil {
 		if allowed, err := s.CheckPermission(userID, conversationID, "who_can_change_name"); err != nil {
 			return GroupConversationPayload{}, err
 		} else if !allowed {
-			return GroupConversationPayload{}, errors.New("只有管理员可以修改群名称")
+			return GroupConversationPayload{}, apperrors.ErrOnlyAdminCanChangeName
 		}
 	}
 	if input.Announcement != nil {
 		if allowed, err := s.CheckPermission(userID, conversationID, "who_can_change_announcement"); err != nil {
 			return GroupConversationPayload{}, err
 		} else if !allowed {
-			return GroupConversationPayload{}, errors.New("只有管理员可以修改群公告")
+			return GroupConversationPayload{}, apperrors.ErrOnlyAdminCanChangeAnnouncement
 		}
 	}
 
@@ -114,7 +131,7 @@ func (s *Service) UpdateGroupConversation(userID, conversationID string, input U
 	if input.Avatar != nil {
 		avatar := strings.TrimSpace(*input.Avatar)
 		if avatar != "" && !strings.HasPrefix(avatar, "/uploads/") {
-			return GroupConversationPayload{}, errors.New("群头像必须使用上传后的地址")
+			return GroupConversationPayload{}, apperrors.ErrAvatarMustUseUploadURL
 		}
 		updates["avatar"] = avatar
 	}
@@ -177,7 +194,7 @@ func (s *Service) ConversationMemberIDs(userID, conversationID string) ([]string
 		}
 		return ids, nil
 	default:
-		return nil, errors.New("当前会话不支持成员列表")
+		return nil, apperrors.ErrBadRequest
 	}
 }
 
@@ -187,7 +204,7 @@ func (s *Service) LeaveGroupConversation(userID, conversationID string) error {
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -195,10 +212,10 @@ func (s *Service) LeaveGroupConversation(userID, conversationID string) error {
 		return err
 	}
 	if member == nil {
-		return errors.New("当前用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 	if member.Role == "owner" {
-		return errors.New("群主请使用解散群聊功能")
+		return apperrors.ErrUseDismissForOwner
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -210,7 +227,7 @@ func (s *Service) LeaveGroupConversation(userID, conversationID string) error {
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
-			return errors.New("当前用户不在该群聊中")
+			return apperrors.ErrUserNotInGroup
 		}
 		return nil
 	})
@@ -222,7 +239,7 @@ func (s *Service) DismissGroupConversation(userID, conversationID string) error 
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -230,10 +247,10 @@ func (s *Service) DismissGroupConversation(userID, conversationID string) error 
 		return err
 	}
 	if member == nil {
-		return errors.New("当前用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 	if member.Role != "owner" {
-		return errors.New("只有群主可以解散群聊")
+		return apperrors.ErrDismissGroupOwnerOnly
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -251,7 +268,7 @@ func (s *Service) DismissGroupConversation(userID, conversationID string) error 
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
-			return errors.New("群聊不存在")
+			return apperrors.ErrGroupNotFound
 		}
 		return nil
 	})
@@ -276,7 +293,7 @@ func (s *Service) IsGroupBotEnabled(userID, conversationID string) (bool, error)
 		return false, err
 	}
 	if conversation.Type != GroupConversationType {
-		return false, errors.New("当前会话不是群聊")
+		return false, apperrors.ErrNotGroupConversation
 	}
 	return conversation.BotEnabled, nil
 }
@@ -287,17 +304,17 @@ func (s *Service) SetGroupBotEnabled(userID, conversationID string, enabled bool
 		return GroupConversationPayload{}, err
 	}
 	if conversation.Type != GroupConversationType {
-		return GroupConversationPayload{}, errors.New("当前会话不是群聊")
+		return GroupConversationPayload{}, apperrors.ErrNotGroupConversation
 	}
 	member, err := s.memberRecord(userID, conversationID)
 	if err != nil {
 		return GroupConversationPayload{}, err
 	}
 	if member == nil {
-		return GroupConversationPayload{}, errors.New("当前用户不在该群聊中")
+		return GroupConversationPayload{}, apperrors.ErrUserNotInGroup
 	}
 	if member.Role != "owner" {
-		return GroupConversationPayload{}, errors.New("只有群主可以设置群机器人")
+		return GroupConversationPayload{}, apperrors.ErrOnlyOwnerCanSetBot
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -334,7 +351,7 @@ func (s *Service) CheckPermission(userID, conversationID, action string) (bool, 
 		return false, err
 	}
 	if conversation.Type != GroupConversationType {
-		return false, errors.New("当前会话不是群聊")
+		return false, apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -342,7 +359,7 @@ func (s *Service) CheckPermission(userID, conversationID, action string) (bool, 
 		return false, err
 	}
 	if member == nil {
-		return false, errors.New("当前用户不在该群聊中")
+		return false, apperrors.ErrUserNotInGroup
 	}
 
 	if member.Role == "owner" {
@@ -376,7 +393,7 @@ func (s *Service) CheckPermission(userID, conversationID, action string) (bool, 
 // SetMemberRole changes a member's role. Only the owner can set roles.
 func (s *Service) SetMemberRole(ownerID, conversationID, targetUserID, role string) error {
 	if role != "admin" && role != "member" {
-		return errors.New("无效的角色")
+		return apperrors.ErrInvalidRole
 	}
 
 	conversation, err := s.getConversationForUser(ownerID, conversationID)
@@ -384,7 +401,7 @@ func (s *Service) SetMemberRole(ownerID, conversationID, targetUserID, role stri
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	owner, err := s.memberRecord(ownerID, conversationID)
@@ -392,11 +409,11 @@ func (s *Service) SetMemberRole(ownerID, conversationID, targetUserID, role stri
 		return err
 	}
 	if owner == nil || owner.Role != "owner" {
-		return errors.New("只有群主可以设置管理员")
+		return apperrors.ErrOnlyOwnerCanSetAdmin
 	}
 
 	if targetUserID == ownerID {
-		return errors.New("不能修改自己的角色")
+		return apperrors.ErrCannotModifySelfRole
 	}
 
 	target, err := s.memberRecord(targetUserID, conversationID)
@@ -404,7 +421,7 @@ func (s *Service) SetMemberRole(ownerID, conversationID, targetUserID, role stri
 		return err
 	}
 	if target == nil {
-		return errors.New("目标用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 
 	return s.db.Model(&ConversationMember{}).
@@ -419,7 +436,7 @@ func (s *Service) TransferOwner(currentOwnerID, conversationID, newOwnerID strin
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	currentOwner, err := s.memberRecord(currentOwnerID, conversationID)
@@ -427,11 +444,11 @@ func (s *Service) TransferOwner(currentOwnerID, conversationID, newOwnerID strin
 		return err
 	}
 	if currentOwner == nil || currentOwner.Role != "owner" {
-		return errors.New("只有群主可以转让群主身份")
+		return apperrors.ErrOnlyOwnerCanTransfer
 	}
 
 	if newOwnerID == currentOwnerID {
-		return errors.New("不能转让给自己")
+		return apperrors.ErrCannotTransferToSelf
 	}
 
 	newOwner, err := s.memberRecord(newOwnerID, conversationID)
@@ -439,7 +456,7 @@ func (s *Service) TransferOwner(currentOwnerID, conversationID, newOwnerID strin
 		return err
 	}
 	if newOwner == nil {
-		return errors.New("目标用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -464,7 +481,7 @@ func (s *Service) MuteMember(operatorID, conversationID, targetUserID string, du
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	operator, err := s.memberRecord(operatorID, conversationID)
@@ -472,11 +489,11 @@ func (s *Service) MuteMember(operatorID, conversationID, targetUserID string, du
 		return err
 	}
 	if operator == nil || (operator.Role != "owner" && operator.Role != "admin") {
-		return errors.New("只有管理员可以禁言成员")
+		return apperrors.ErrOnlyAdminCanMute
 	}
 
 	if targetUserID == operatorID {
-		return errors.New("不能禁言自己")
+		return apperrors.ErrCannotMuteSelf
 	}
 
 	target, err := s.memberRecord(targetUserID, conversationID)
@@ -484,13 +501,13 @@ func (s *Service) MuteMember(operatorID, conversationID, targetUserID string, du
 		return err
 	}
 	if target == nil {
-		return errors.New("目标用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 	if target.Role == "owner" {
-		return errors.New("不能禁言群主")
+		return apperrors.ErrCannotMuteOwner
 	}
 	if target.Role == "admin" && operator.Role != "owner" {
-		return errors.New("管理员不能禁言其他管理员")
+		return apperrors.ErrAdminCannotMuteAdmin
 	}
 
 	mutedUntil := time.Now().Add(duration)
@@ -506,7 +523,7 @@ func (s *Service) UnmuteMember(operatorID, conversationID, targetUserID string) 
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	operator, err := s.memberRecord(operatorID, conversationID)
@@ -514,7 +531,7 @@ func (s *Service) UnmuteMember(operatorID, conversationID, targetUserID string) 
 		return err
 	}
 	if operator == nil || (operator.Role != "owner" && operator.Role != "admin") {
-		return errors.New("只有管理员可以解除禁言")
+		return apperrors.ErrOnlyAdminCanUnmute
 	}
 
 	target, err := s.memberRecord(targetUserID, conversationID)
@@ -522,7 +539,7 @@ func (s *Service) UnmuteMember(operatorID, conversationID, targetUserID string) 
 		return err
 	}
 	if target == nil {
-		return errors.New("目标用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 
 	pastTime := time.Now().Add(-time.Hour)
@@ -538,7 +555,7 @@ func (s *Service) IsMemberMuted(userID, conversationID string) (bool, error) {
 		return false, err
 	}
 	if member == nil {
-		return false, errors.New("当前用户不在该群聊中")
+		return false, apperrors.ErrUserNotInGroup
 	}
 
 	if member.MutedUntil != nil && member.MutedUntil.After(time.Now()) {
@@ -570,7 +587,7 @@ func (s *Service) GetGroupPermissions(userID, conversationID string) (map[string
 		return nil, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, errors.New("当前会话不是群聊")
+		return nil, apperrors.ErrNotGroupConversation
 	}
 
 	perms := make(map[string]any)
@@ -591,7 +608,7 @@ func (s *Service) UpdateGroupPermissions(ownerID, conversationID string, perms m
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(ownerID, conversationID)
@@ -599,7 +616,7 @@ func (s *Service) UpdateGroupPermissions(ownerID, conversationID string, perms m
 		return err
 	}
 	if member == nil || member.Role != "owner" {
-		return errors.New("只有群主可以修改权限设置")
+		return apperrors.ErrOnlyOwnerCanModifyPerm
 	}
 
 	data, err := json.Marshal(perms)
@@ -610,4 +627,95 @@ func (s *Service) UpdateGroupPermissions(ownerID, conversationID string, perms m
 	return s.db.Model(&Conversation{}).
 		Where("id = ?", conversationID).
 		Updates(map[string]any{"permissions": string(data), "updated_at": time.Now()}).Error
+}
+
+// AddGroupMembers adds members to a group conversation. The inviter must be a group member.
+// The invited users must be friends of the inviter.
+func (s *Service) AddGroupMembers(inviterID, conversationID string, userIDs []string) ([]string, error) {
+	inviterID = strings.TrimSpace(inviterID)
+	conversationID = strings.TrimSpace(conversationID)
+
+	if inviterID == "" || conversationID == "" {
+		return nil, apperrors.ErrMissingRequiredParam
+	}
+
+	// Verify inviter is a group member
+	inviterMember, err := s.memberRecord(inviterID, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if inviterMember == nil {
+		return nil, apperrors.ErrNotInGroupConversation
+	}
+
+	// Get conversation
+	var conversation Conversation
+	if err := s.db.Where("id = ?", conversationID).First(&conversation).Error; err != nil {
+		return nil, apperrors.ErrGroupNotFound
+	}
+	if conversation.Type != GroupConversationType {
+		return nil, apperrors.ErrNotGroupConversation
+	}
+
+	// Filter and validate user IDs
+	unique := make([]string, 0, len(userIDs))
+	seen := map[string]struct{}{inviterID: {}}
+	for _, userID := range userIDs {
+		userID = strings.TrimSpace(userID)
+		if userID == "" {
+			continue
+		}
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		unique = append(unique, userID)
+	}
+
+	if len(unique) == 0 {
+		return nil, apperrors.ErrSelectFriendsToInvite
+	}
+
+	// Add members in transaction
+	now := time.Now()
+	var addedNames []string
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		for _, userID := range unique {
+			// Check if already a member
+			var count int64
+			if err := tx.Model(&ConversationMember{}).
+				Where("conversation_id = ? AND user_id = ?", conversationID, userID).
+				Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				continue // Already a member, skip
+			}
+
+			// Look up user
+			user, err := s.lookupUser(userID)
+			if err != nil {
+				continue // Skip invalid users
+			}
+
+			// Add member
+			member := ConversationMember{
+				ID:             uid.New("member"),
+				ConversationID: conversationID,
+				UserID:         userID,
+				Role:           "member",
+				JoinedAt:       now,
+			}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "conversation_id"}, {Name: "user_id"}},
+				DoNothing: true,
+			}).Create(&member).Error; err != nil {
+				return err
+			}
+			addedNames = append(addedNames, user.Nickname)
+		}
+		return nil
+	})
+
+	return addedNames, err
 }

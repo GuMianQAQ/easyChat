@@ -1,10 +1,10 @@
 package chatstore
 
 import (
-	"errors"
 	"strings"
 	"time"
 
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
@@ -14,18 +14,18 @@ import (
 func (s *Service) CreateFavorite(userID, messageID string) (FavoritePayload, error) {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return FavoritePayload{}, errors.New("缺少消息 ID")
+		return FavoritePayload{}, apperrors.ErrMissingMessageID
 	}
 
 	var message Message
 	if err := s.db.First(&message, "id = ?", messageID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return FavoritePayload{}, errors.New("消息不存在")
+		if err == gorm.ErrRecordNotFound {
+			return FavoritePayload{}, apperrors.ErrMessageNotFound
 		}
 		return FavoritePayload{}, err
 	}
 	if message.Revoked {
-		return FavoritePayload{}, errors.New("已撤回消息不能收藏")
+		return FavoritePayload{}, apperrors.ErrBadRequest
 	}
 
 	conversation, err := s.getConversationForUser(userID, message.ConversationID)
@@ -83,14 +83,14 @@ func (s *Service) CreateFavorite(userID, messageID string) (FavoritePayload, err
 func (s *Service) DeleteFavorite(userID, favoriteID string) error {
 	favoriteID = strings.TrimSpace(favoriteID)
 	if favoriteID == "" {
-		return errors.New("缺少收藏 ID")
+		return apperrors.ErrMissingRequiredParam
 	}
 	result := s.db.Where("id = ? AND user_id = ?", favoriteID, userID).Delete(&Favorite{})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("收藏不存在")
+		return apperrors.ErrNotFound
 	}
 	return nil
 }
@@ -98,14 +98,14 @@ func (s *Service) DeleteFavorite(userID, favoriteID string) error {
 func (s *Service) DeleteFavoriteByMessage(userID, messageID string) error {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return errors.New("缺少消息 ID")
+		return apperrors.ErrMissingMessageID
 	}
 	result := s.db.Where("user_id = ? AND message_id = ?", userID, messageID).Delete(&Favorite{})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("收藏不存在")
+		return apperrors.ErrNotFound
 	}
 	return nil
 }
@@ -146,7 +146,7 @@ func (s *Service) favoriteQuoteSnapshot(quoteID *string) (string, string, error)
 	}
 	var quote Message
 	if err := s.db.First(&quote, "id = ?", *quoteID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if err == gorm.ErrRecordNotFound {
 			return "", "", nil
 		}
 		return "", "", err

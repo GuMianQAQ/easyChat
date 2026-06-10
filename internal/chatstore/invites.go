@@ -3,9 +3,9 @@ package chatstore
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"time"
 
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
@@ -30,7 +30,7 @@ func (s *Service) GenerateInviteLink(userID, conversationID, expiresIn string, m
 		return nil, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, errors.New("当前会话不是群聊")
+		return nil, apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -38,7 +38,7 @@ func (s *Service) GenerateInviteLink(userID, conversationID, expiresIn string, m
 		return nil, err
 	}
 	if member == nil || (member.Role != "owner" && member.Role != "admin") {
-		return nil, errors.New("只有管理员可以生成邀请链接")
+		return nil, apperrors.ErrAdminOnly
 	}
 
 	// Generate unique code
@@ -112,7 +112,7 @@ func (s *Service) ListInviteLinks(userID, conversationID string) ([]GroupInviteP
 		return nil, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, errors.New("当前会话不是群聊")
+		return nil, apperrors.ErrNotGroupConversation
 	}
 
 	var links []GroupInviteLink
@@ -158,7 +158,7 @@ func (s *Service) DeleteInviteLink(userID, conversationID, inviteID string) erro
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -166,7 +166,7 @@ func (s *Service) DeleteInviteLink(userID, conversationID, inviteID string) erro
 		return err
 	}
 	if member == nil || (member.Role != "owner" && member.Role != "admin") {
-		return errors.New("只有管理员可以删除邀请链接")
+		return apperrors.ErrAdminOnly
 	}
 
 	result := s.db.Where("id = ? AND conversation_id = ?", inviteID, conversationID).Delete(&GroupInviteLink{})
@@ -174,7 +174,7 @@ func (s *Service) DeleteInviteLink(userID, conversationID, inviteID string) erro
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("邀请链接不存在")
+		return apperrors.ErrNotFound
 	}
 	return nil
 }
@@ -183,17 +183,17 @@ func (s *Service) DeleteInviteLink(userID, conversationID, inviteID string) erro
 func (s *Service) JoinByInviteCode(userID, code string) (*ConversationSummary, error) {
 	var link GroupInviteLink
 	if err := s.db.Where("code = ?", code).First(&link).Error; err != nil {
-		return nil, errors.New("邀请链接不存在")
+		return nil, apperrors.ErrNotFound
 	}
 
 	// Check expiry
 	if link.ExpiresAt != nil && link.ExpiresAt.Before(time.Now()) {
-		return nil, errors.New("邀请链接已过期")
+		return nil, apperrors.ErrBadRequest
 	}
 
 	// Check max uses
 	if link.MaxUses > 0 && link.UseCount >= link.MaxUses {
-		return nil, errors.New("邀请链接已达到最大使用次数")
+		return nil, apperrors.ErrBadRequest
 	}
 
 	// Check if already a member

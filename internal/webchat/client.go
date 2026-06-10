@@ -85,7 +85,6 @@ func payloadToWire(message chatstore.MessagePayload) Message {
 		TargetName:     message.TargetName,
 		Content:        message.Content,
 		CreatedAt:      message.CreatedAt,
-		OnlineCount:    message.OnlineCount,
 		Avatar:         message.Avatar,
 		Quote:          payloadQuoteToWire(message.Quote),
 		Revoked:        message.Revoked,
@@ -205,8 +204,6 @@ func (c *Client) readPump() {
 				ConversationID: validated.ConversationID,
 				MessageScope:   validated.MessageScope,
 				MessageType:    validated.MessageType,
-				TargetUserID:   validated.TargetUserID,
-				TargetName:     validated.TargetName,
 				Content:        validated.Content,
 				Quote:          payloadQuoteToStore(validated.Quote),
 			})
@@ -299,7 +296,7 @@ func (c *Client) writePump() {
 }
 
 func (c *Client) sendError(content string) {
-	payload, err := MarshalMessage(NewErrorMessage(content, 0))
+	payload, err := MarshalMessage(NewErrorMessage(content))
 	if err != nil {
 		return
 	}

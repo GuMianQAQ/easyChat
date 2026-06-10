@@ -41,6 +41,7 @@ export function applyIncomingConversationMessage(
     | "senderName"
     | "targetName"
     | "targetUserId"
+    | "type"
   >,
   options: {
     isConversationVisible: boolean;
@@ -49,6 +50,7 @@ export function applyIncomingConversationMessage(
 ): Conversation[] {
   const isPrivate = latestMessage.messageScope === "private";
   const isGroup = latestMessage.messageScope === "group";
+  const isNotification = latestMessage.type === "notification";
   const current =
     previous.find((conversation) => conversation.id === latestMessage.conversationId) ||
     ({
@@ -68,12 +70,14 @@ export function applyIncomingConversationMessage(
         : undefined,
     } satisfies Conversation);
 
-  const nextUnreadCount = shouldIncrementUnreadCount({
-    isSelf: latestMessage.isSelf,
-    isConversationVisible: options.isConversationVisible,
-  })
-    ? current.unreadCount + 1
-    : current.unreadCount;
+  const nextUnreadCount = isNotification
+    ? current.unreadCount
+    : shouldIncrementUnreadCount({
+        isSelf: latestMessage.isSelf,
+        isConversationVisible: options.isConversationVisible,
+      })
+      ? current.unreadCount + 1
+      : current.unreadCount;
 
   const next: Conversation = {
     ...current,

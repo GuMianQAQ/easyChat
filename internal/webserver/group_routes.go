@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"easyChat/internal/auth"
 	"easyChat/internal/chatstore"
 	"easyChat/internal/webchat"
 
@@ -15,11 +16,7 @@ import (
 
 func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 	api.POST("/conversations/group", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req chatstore.CreateGroupConversationInput
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
@@ -28,7 +25,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 		friends, err := s.Social.ListFriends(user.ID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		friendSet := make(map[string]struct{}, len(friends))
@@ -60,7 +57,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 		conversation, err := s.Store.CreateGroupConversation(user.ID, req.Name, memberIDs)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		if targets, err := s.Store.ConversationMemberIDs(user.ID, conversation.ID); err != nil {
@@ -94,29 +91,17 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 	})
 
 	api.GET("/conversations/:conversationId/group", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		conversation, err := s.Store.GetGroupConversation(user.ID, c.Param("conversationId"))
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"conversation": conversation})
 	})
 
 	api.PATCH("/conversations/:conversationId/group", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req chatstore.UpdateGroupConversationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
@@ -124,14 +109,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 		}
 		conversation, err := s.Store.UpdateGroupConversation(user.ID, c.Param("conversationId"), req)
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			if strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 
@@ -164,11 +142,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 	})
 
 	api.PATCH("/groups/:id/bot", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			BotEnabled bool `json:"botEnabled"`
 		}
@@ -178,57 +152,25 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 		}
 		conversation, err := s.Store.SetGroupBotEnabled(user.ID, c.Param("id"), req.BotEnabled)
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) ||
-				strings.Contains(err.Error(), errGroupAccessDenied) ||
-				strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"conversation": conversation})
 	})
 
 	api.POST("/conversations/:conversationId/group/leave", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Store.LeaveGroupConversation(user.ID, c.Param("conversationId")); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errGroupAccessDenied) ||
-				strings.Contains(err.Error(), errConversationNoPermission) ||
-				strings.Contains(err.Error(), errNotInGroupConversation) {
-				status = http.StatusForbidden
-			}
-			if strings.Contains(err.Error(), errUseDismissForOwner) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	api.DELETE("/conversations/:conversationId/group", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Store.DismissGroupConversation(user.ID, c.Param("conversationId")); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errGroupAccessDenied) ||
-				strings.Contains(err.Error(), errConversationNoPermission) ||
-				strings.Contains(err.Error(), errNotInGroupConversation) {
-				status = http.StatusForbidden
-			}
-			if strings.Contains(err.Error(), errDismissGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -236,11 +178,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Set member as admin (owner only)
 	api.POST("/conversations/:conversationId/group/admin", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			UserID string `json:"userId"`
 		}
@@ -249,11 +187,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 			return
 		}
 		if err := s.Store.SetMemberRole(user.ID, c.Param("conversationId"), req.UserID, "admin"); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -261,17 +195,9 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Revoke admin role (owner only)
 	api.DELETE("/conversations/:conversationId/group/admin/:userId", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Store.SetMemberRole(user.ID, c.Param("conversationId"), c.Param("userId"), "member"); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -279,11 +205,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Transfer ownership
 	api.POST("/conversations/:conversationId/group/transfer", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			UserID string `json:"userId"`
 		}
@@ -292,11 +214,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 			return
 		}
 		if err := s.Store.TransferOwner(user.ID, c.Param("conversationId"), req.UserID); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -304,11 +222,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Mute a member
 	api.POST("/conversations/:conversationId/group/mute", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			UserID   string `json:"userId"`
 			Duration string `json:"duration"` // "10m", "1h", "1d", "forever"
@@ -334,11 +248,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 		}
 
 		if err := s.Store.MuteMember(user.ID, c.Param("conversationId"), req.UserID, duration); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -346,11 +256,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Unmute a member
 	api.POST("/conversations/:conversationId/group/unmute", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			UserID string `json:"userId"`
 		}
@@ -359,11 +265,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 			return
 		}
 		if err := s.Store.UnmuteMember(user.ID, c.Param("conversationId"), req.UserID); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -371,18 +273,10 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Get group permissions
 	api.GET("/conversations/:conversationId/group/permissions", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		perms, err := s.Store.GetGroupPermissions(user.ID, c.Param("conversationId"))
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"permissions": perms})
@@ -390,22 +284,14 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Update group permissions (owner only)
 	api.PUT("/conversations/:conversationId/group/permissions", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req map[string]any
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
 			return
 		}
 		if err := s.Store.UpdateGroupPermissions(user.ID, c.Param("conversationId"), req); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -413,11 +299,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Pin a message (admin/owner only)
 	api.POST("/conversations/:conversationId/group/pin", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			MessageID string `json:"messageId"`
 		}
@@ -426,11 +308,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 			return
 		}
 		if err := s.Store.PinMessage(user.ID, c.Param("conversationId"), req.MessageID); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -438,17 +316,9 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Unpin a message (admin/owner only)
 	api.DELETE("/conversations/:conversationId/group/pin/:messageId", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Store.UnpinMessage(user.ID, c.Param("conversationId"), c.Param("messageId")); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -456,18 +326,10 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Get pinned messages
 	api.GET("/conversations/:conversationId/group/pins", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		pins, err := s.Store.GetPinnedMessages(user.ID, c.Param("conversationId"))
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"pins": pins})
@@ -475,11 +337,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Get group files
 	api.GET("/conversations/:conversationId/files", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		fileType := c.Query("type")
 		keyword := c.Query("keyword")
 		page := 1
@@ -492,11 +350,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 		}
 		files, total, err := s.Store.GetGroupFiles(user.ID, c.Param("conversationId"), fileType, keyword, page, pageSize)
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"files": files, "total": total, "page": page, "pageSize": pageSize})
@@ -504,11 +358,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Get group images
 	api.GET("/conversations/:conversationId/images", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		page := 1
 		pageSize := 50
 		if p := c.Query("page"); p != "" {
@@ -519,11 +369,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 		}
 		images, total, err := s.Store.GetGroupImages(user.ID, c.Param("conversationId"), page, pageSize)
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"images": images, "total": total, "page": page, "pageSize": pageSize})
@@ -531,11 +377,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Generate invite link
 	api.POST("/conversations/:conversationId/group/invites", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		var req struct {
 			ExpiresIn string `json:"expiresIn"` // "1d", "7d", "30d", "never"
 			MaxUses   int    `json:"maxUses"`   // 1, 10, 0 (unlimited)
@@ -549,11 +391,7 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 		}
 		link, err := s.Store.GenerateInviteLink(user.ID, c.Param("conversationId"), req.ExpiresIn, req.MaxUses)
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"invite": link})
@@ -561,18 +399,10 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// List invite links
 	api.GET("/conversations/:conversationId/group/invites", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		invites, err := s.Store.ListInviteLinks(user.ID, c.Param("conversationId"))
 		if err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errConversationAccessDenied) || strings.Contains(err.Error(), errGroupAccessDenied) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"invites": invites})
@@ -580,17 +410,9 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Delete invite link
 	api.DELETE("/conversations/:conversationId/group/invites/:inviteId", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		if err := s.Store.DeleteInviteLink(user.ID, c.Param("conversationId"), c.Param("inviteId")); err != nil {
-			status := http.StatusBadRequest
-			if strings.Contains(err.Error(), errAdminOnly) || strings.Contains(err.Error(), errGroupOwnerOnly) {
-				status = http.StatusForbidden
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -598,16 +420,280 @@ func (s *Server) registerGroupRoutes(api *gin.RouterGroup) {
 
 	// Join by invite code
 	api.POST("/conversations/group/join/:code", func(c *gin.Context) {
-		user, err := s.Auth.UserFromToken(bearerToken(c))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
+		user := c.MustGet("user").(auth.PublicUser)
 		conversation, err := s.Store.JoinByInviteCode(user.ID, c.Param("code"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Error(err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"conversation": conversation})
+	})
+
+	// Add members to group (direct invitation)
+	api.POST("/conversations/:conversationId/group/members", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		var req struct {
+			UserIDs []string `json:"userIds"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || len(req.UserIDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择要邀请的好友"})
+			return
+		}
+
+		conversationID := c.Param("conversationId")
+		addedNames, err := s.Store.AddGroupMembers(user.ID, conversationID, req.UserIDs)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		// Save notification message and broadcast
+		if len(addedNames) > 0 && s.Hub != nil {
+			content := user.Nickname + " 邀请 " + strings.Join(addedNames, "、") + " 加入了群聊"
+			notif, err := s.Store.SaveNotification(conversationID, user.ID, user.Nickname, content)
+			if err == nil {
+				// Get all group members to broadcast
+				memberIDs, err := s.Store.ConversationMemberIDs(user.ID, conversationID)
+				if err == nil {
+					targets := make([]string, 0, len(memberIDs))
+					for _, id := range memberIDs {
+						if id != user.ID {
+							targets = append(targets, id)
+						}
+					}
+					if len(targets) > 0 {
+						s.Hub.BroadcastPrivate(webchat.Message{
+							ID:             notif.ID,
+							ConversationID: conversationID,
+							MessageScope:   webchat.ScopeGroup,
+							Type:           webchat.MessageTypeNotification,
+							MessageType:    webchat.ChatMessageText,
+							SenderID:       user.ID,
+							SenderName:     user.Nickname,
+							Content:        content,
+							CreatedAt:      notif.CreatedAt,
+						}, targets...)
+					}
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"added": addedNames})
+	})
+
+	// Album routes
+	api.POST("/conversations/:conversationId/albums", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		conversationID := c.Param("conversationId")
+
+		var req struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
+			return
+		}
+
+		album, err := s.Store.CreateAlbum(user.ID, conversationID, req.Name, req.Description)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"album": album})
+	})
+
+	api.GET("/conversations/:conversationId/albums", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		conversationID := c.Param("conversationId")
+
+		page := 1
+		pageSize := 20
+		if p := c.Query("page"); p != "" {
+			fmt.Sscanf(p, "%d", &page)
+		}
+		if ps := c.Query("pageSize"); ps != "" {
+			fmt.Sscanf(ps, "%d", &pageSize)
+		}
+
+		albums, total, err := s.Store.GetAlbums(user.ID, conversationID, page, pageSize)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"albums": albums, "total": total, "page": page, "pageSize": pageSize})
+	})
+
+	api.GET("/conversations/:conversationId/albums/:albumId", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		albumID := c.Param("albumId")
+
+		album, err := s.Store.GetAlbum(user.ID, albumID)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"album": album})
+	})
+
+	api.PUT("/conversations/:conversationId/albums/:albumId", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		albumID := c.Param("albumId")
+
+		var req struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
+			return
+		}
+
+		album, err := s.Store.UpdateAlbum(user.ID, albumID, req.Name, req.Description)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"album": album})
+	})
+
+	api.DELETE("/conversations/:conversationId/albums/:albumId", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		albumID := c.Param("albumId")
+
+		if err := s.Store.DeleteAlbum(user.ID, albumID); err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "相册已删除"})
+	})
+
+	api.POST("/conversations/:conversationId/albums/:albumId/photos", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		albumID := c.Param("albumId")
+
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择文件"})
+			return
+		}
+
+		// Upload file
+		fileURL, err := s.Store.StoreUpload(file)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		photo, err := s.Store.UploadAlbumPhoto(user.ID, albumID, fileURL, file.Filename, file.Size, file.Header.Get("Content-Type"))
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"photo": photo})
+	})
+
+	api.GET("/conversations/:conversationId/albums/:albumId/photos", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		albumID := c.Param("albumId")
+
+		page := 1
+		pageSize := 20
+		if p := c.Query("page"); p != "" {
+			fmt.Sscanf(p, "%d", &page)
+		}
+		if ps := c.Query("pageSize"); ps != "" {
+			fmt.Sscanf(ps, "%d", &pageSize)
+		}
+
+		photos, total, err := s.Store.GetAlbumPhotos(user.ID, albumID, page, pageSize)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"photos": photos, "total": total, "page": page, "pageSize": pageSize})
+	})
+
+	api.DELETE("/conversations/:conversationId/albums/:albumId/photos/:photoId", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		photoID := c.Param("photoId")
+
+		if err := s.Store.DeleteAlbumPhoto(user.ID, photoID); err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "图片已删除"})
+	})
+
+	api.POST("/conversations/:conversationId/albums/:albumId/photos/batch-delete", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		albumID := c.Param("albumId")
+
+		var req struct {
+			PhotoIDs []string `json:"photoIds"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
+			return
+		}
+
+		if err := s.Store.BatchDeleteAlbumPhotos(user.ID, albumID, req.PhotoIDs); err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "图片已批量删除"})
+	})
+
+	api.GET("/conversations/:conversationId/album-photos", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		conversationID := c.Param("conversationId")
+
+		page := 1
+		pageSize := 20
+		if p := c.Query("page"); p != "" {
+			fmt.Sscanf(p, "%d", &page)
+		}
+		if ps := c.Query("pageSize"); ps != "" {
+			fmt.Sscanf(ps, "%d", &pageSize)
+		}
+
+		photos, total, err := s.Store.GetAllAlbumPhotos(user.ID, conversationID, page, pageSize)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"photos": photos, "total": total, "page": page, "pageSize": pageSize})
+	})
+
+	api.GET("/conversations/:conversationId/album-photos/mine", func(c *gin.Context) {
+		user := c.MustGet("user").(auth.PublicUser)
+		conversationID := c.Param("conversationId")
+
+		page := 1
+		pageSize := 20
+		if p := c.Query("page"); p != "" {
+			fmt.Sscanf(p, "%d", &page)
+		}
+		if ps := c.Query("pageSize"); ps != "" {
+			fmt.Sscanf(ps, "%d", &pageSize)
+		}
+
+		photos, total, err := s.Store.GetMyAlbumPhotos(user.ID, conversationID, page, pageSize)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"photos": photos, "total": total, "page": page, "pageSize": pageSize})
 	})
 }

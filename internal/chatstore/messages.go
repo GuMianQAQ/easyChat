@@ -1,7 +1,6 @@
 package chatstore
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"easyChat/internal/auth"
+	apperrors "easyChat/internal/errors"
 )
 
 func (s *Service) GetMessages(userID, conversationID string, page, pageSize int) (MessagePage, error) {
@@ -98,9 +98,53 @@ func (s *Service) SaveMessage(user auth.PublicUser, input PersistMessageInput) (
 	return s.toPayload(user.ID, record, conversation, quoteSummary), nil
 }
 
+func (s *Service) SaveNotification(conversationID, senderID, senderName, content string) (MessagePayload, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	senderID = strings.TrimSpace(senderID)
+	content = strings.TrimSpace(content)
+
+	if conversationID == "" || content == "" {
+		return MessagePayload{}, apperrors.ErrMissingRequiredParam
+	}
+
+	var conversation Conversation
+	if err := s.db.Where("id = ?", conversationID).First(&conversation).Error; err != nil {
+		return MessagePayload{}, apperrors.ErrConversationNotFound
+	}
+
+	now := time.Now()
+	record := Message{
+		ID:             fmt.Sprintf("notif-%d", now.UnixNano()),
+		ConversationID: conversationID,
+		SenderID:       senderID,
+		SenderName:     senderName,
+		MessageType:    "text",
+		Content:        content,
+		CreatedAt:      now,
+	}
+	if err := s.db.Create(&record).Error; err != nil {
+		return MessagePayload{}, err
+	}
+	if err := s.db.Model(&Conversation{}).Where("id = ?", conversationID).Update("updated_at", now).Error; err != nil {
+		return MessagePayload{}, err
+	}
+
+	return MessagePayload{
+		ID:             record.ID,
+		ConversationID: record.ConversationID,
+		MessageScope:   conversation.Type,
+		Type:           "notification",
+		MessageType:    "text",
+		SenderID:       record.SenderID,
+		SenderName:     record.SenderName,
+		Content:        record.Content,
+		CreatedAt:      formatTime(record.CreatedAt),
+	}, nil
+}
+
 func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID string) (RevokeResult, error) {
 	if strings.TrimSpace(messageID) == "" {
-		return RevokeResult{}, errors.New("缺少消息 ID")
+		return RevokeResult{}, apperrors.ErrMissingMessageID
 	}
 	conversation, err := s.getConversationForUser(user.ID, conversationID)
 	if err != nil {
@@ -109,16 +153,16 @@ func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID 
 
 	var record Message
 	if err := s.db.Where("id = ? AND conversation_id = ?", messageID, conversationID).First(&record).Error; err != nil {
-		return RevokeResult{}, errors.New("消息不存在")
+		return RevokeResult{}, apperrors.ErrMessageNotFound
 	}
 	if record.SenderID != user.ID {
-		return RevokeResult{}, errors.New("只能撤回自己发送的消息")
+		return RevokeResult{}, apperrors.ErrCanOnlyRevokeSelf
 	}
 	if record.Revoked {
-		return RevokeResult{}, errors.New("消息已经撤回")
+		return RevokeResult{}, apperrors.ErrMessageAlreadyRevoked
 	}
 	if time.Since(record.CreatedAt) > 2*time.Minute {
-		return RevokeResult{}, errors.New("消息发送超过两分钟，无法撤回")
+		return RevokeResult{}, apperrors.ErrRevokeTimeExpired
 	}
 	if err := s.db.Model(&record).Update("revoked", true).Error; err != nil {
 		return RevokeResult{}, err
@@ -163,7 +207,7 @@ func (s *Service) GetMessagesAround(userID, conversationID, messageID string, li
 
 	var target Message
 	if err := s.db.Where("id = ? AND conversation_id = ?", strings.TrimSpace(messageID), conversationID).First(&target).Error; err != nil {
-		return MessagePage{}, errors.New("消息不存在")
+		return MessagePage{}, apperrors.ErrMessageNotFound
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -171,51 +215,52 @@ func (s *Service) GetMessagesAround(userID, conversationID, messageID string, li
 		return MessagePage{}, err
 	}
 
-	query := s.db.Where("conversation_id = ?", conversationID)
+	baseQuery := s.db.Where("conversation_id = ?", conversationID)
 	if member != nil && member.ClearedAt != nil {
-		query = query.Where("created_at > ?", *member.ClearedAt)
-	}
-
-	var records []Message
-	if err := query.Order("created_at asc, id asc").Find(&records).Error; err != nil {
-		return MessagePage{}, err
-	}
-
-	index := -1
-	for i, record := range records {
-		if record.ID == target.ID {
-			index = i
-			break
-		}
-	}
-	if index < 0 {
-		return MessagePage{}, errors.New("消息不存在")
+		baseQuery = baseQuery.Where("created_at > ?", *member.ClearedAt)
 	}
 
 	half := limit / 2
-	start := index - half
-	if start < 0 {
-		start = 0
-	}
-	end := start + limit
-	if end > len(records) {
-		end = len(records)
-		start = end - limit
-		if start < 0 {
-			start = 0
-		}
+
+	var beforeRecords []Message
+	if err := baseQuery.
+		Where("(created_at < ?) OR (created_at = ? AND id < ?)", target.CreatedAt, target.CreatedAt, target.ID).
+		Order("created_at desc, id desc").
+		Limit(half).
+		Find(&beforeRecords).Error; err != nil {
+		return MessagePage{}, err
 	}
 
-	window := records[start:end]
-	items, err := s.buildMessages(userID, window)
+	var afterRecords []Message
+	if err := baseQuery.
+		Where("(created_at > ?) OR (created_at = ? AND id >= ?)", target.CreatedAt, target.CreatedAt, target.ID).
+		Order("created_at asc, id asc").
+		Limit(limit - half).
+		Find(&afterRecords).Error; err != nil {
+		return MessagePage{}, err
+	}
+
+	for i, j := 0, len(beforeRecords)-1; i < j; i, j = i+1, j-1 {
+		beforeRecords[i], beforeRecords[j] = beforeRecords[j], beforeRecords[i]
+	}
+
+	records := make([]Message, 0, len(beforeRecords)+len(afterRecords))
+	records = append(records, beforeRecords...)
+	records = append(records, afterRecords...)
+
+	items, err := s.buildMessages(userID, records)
 	if err != nil {
 		return MessagePage{}, err
 	}
+
+	hasMoreBefore := len(beforeRecords) == half
+	hasMoreAfter := len(afterRecords) == limit-half
+
 	return MessagePage{
 		Items:    items,
 		Page:     1,
 		PageSize: limit,
-		HasMore:  start > 0 || end < len(records),
+		HasMore:  hasMoreBefore || hasMoreAfter,
 	}, nil
 }
 

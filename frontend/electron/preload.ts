@@ -177,3 +177,8 @@ contextBridge.exposeInMainWorld("myChatAttentionPreview", {
     return () => ipcRenderer.removeListener("mychat:attention-preview", wrapped);
   },
 });
+
+contextBridge.exposeInMainWorld("myChatCapture", {
+  takeScreenshot: (hideWindow: boolean) =>
+    ipcRenderer.invoke("mychat-capture:screenshot", hideWindow) as Promise<string | null>,
+});

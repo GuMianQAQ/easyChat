@@ -122,47 +122,10 @@ async function exportCanvasWithinLimit(
   return canvas.toDataURL(mimeType, 0.55);
 }
 
-export async function captureDisplayFrame(): Promise<string | null> {
-  if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error("当前浏览器不支持截图功能");
+export async function captureScreen(hideWindow: boolean): Promise<string | null> {
+  if (!window.myChatCapture) {
+    throw new Error("当前环境不支持截图功能");
   }
 
-  let stream: MediaStream | null = null;
-  try {
-    stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 1 },
-      audio: false,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "NotAllowedError") {
-      return null;
-    }
-    throw error;
-  }
-
-  try {
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.muted = true;
-    video.playsInline = true;
-    await video.play();
-
-    const scale = video.videoWidth > MAX_IMAGE_EDGE ? MAX_IMAGE_EDGE / video.videoWidth : 1;
-    const targetWidth = Math.round(video.videoWidth * scale);
-    const targetHeight = Math.round(video.videoHeight * scale);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("截图处理失败");
-    }
-
-    context.drawImage(video, 0, 0, targetWidth, targetHeight);
-    return await exportCanvasWithinLimit(canvas, "image/webp");
-  } finally {
-    stream.getTracks().forEach((track) => track.stop());
-  }
+  return window.myChatCapture.takeScreenshot(hideWindow);
 }

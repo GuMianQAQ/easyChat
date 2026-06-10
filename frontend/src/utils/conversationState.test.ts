@@ -27,6 +27,7 @@ test("applyIncomingConversationMessage increments unread for hidden private mess
     | "senderName"
     | "targetName"
     | "targetUserId"
+    | "type"
   > = {
     avatar: "",
     content: "hello world",
@@ -35,6 +36,7 @@ test("applyIncomingConversationMessage increments unread for hidden private mess
     isSelf: false,
     messageScope: "private",
     messageType: "text",
+    type: "chat",
     revoked: false,
     senderId: "u-peer",
     senderName: "Peer",
@@ -68,6 +70,7 @@ test("applyIncomingConversationMessage preserves unread count for self message",
     isSelf: true,
     messageScope: "private" as const,
     messageType: "text" as const,
+    type: "chat" as const,
     revoked: false,
     senderId: "u-self",
     senderName: "Self",
@@ -100,6 +103,7 @@ test("applyIncomingConversationMessage prefixes group previews with sender name"
     isSelf: false,
     messageScope: "group" as const,
     messageType: "text" as const,
+    type: "chat" as const,
     revoked: false,
     senderId: "u-peer",
     senderName: "Alice",

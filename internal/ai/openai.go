@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -77,7 +76,6 @@ type openAIStreamChunk struct {
 }
 
 func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
-	start := time.Now()
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -97,7 +95,6 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	}
 
 	url := p.baseURL + "/chat/completions"
-	log.Printf("AI Chat request: POST %s (model=%s)", url, model)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
@@ -112,8 +109,6 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	}
 	defer httpResp.Body.Close()
 
-	log.Printf("AI Chat response: status=%d", httpResp.StatusCode)
-
 	if httpResp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(httpResp.Body)
 		return nil, fmt.Errorf("API error (status %d): %s", httpResp.StatusCode, string(respBody))
@@ -123,8 +118,6 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
-
-	log.Printf("AI Chat raw response body: %s", string(respBody))
 
 	var openAIResp openAIResponse
 	if err := json.Unmarshal(respBody, &openAIResp); err != nil {
@@ -138,8 +131,6 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	if len(openAIResp.Choices) == 0 {
 		return nil, fmt.Errorf("no choices in response")
 	}
-
-	log.Printf("AI Chat completed: model=%s, tokens=%d, duration=%v", model, openAIResp.Usage.TotalTokens, time.Since(start))
 
 	return &ChatResponse{
 		Content:      openAIResp.Choices[0].Message.Content,
@@ -243,7 +234,6 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 	}
 
 	url := p.baseURL + "/embeddings"
-	log.Printf("AI Embed request: POST %s", url)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {

@@ -41,10 +41,9 @@ func (h *Hub) Run() {
 				h.userIndex[client.UserID] = make(map[*Client]bool)
 			}
 			h.userIndex[client.UserID][client] = true
-			clientCount := len(h.clients)
 			h.mu.Unlock()
 			log.Printf("web client connected: %s", client.Username)
-			h.publishAll(NewUsersMessage(clientCount))
+			h.publishAll(NewUsersMessage())
 		case client := <-h.unregister:
 			h.removeClient(client, true)
 		case request := <-h.dispatch:
@@ -73,22 +72,12 @@ func (h *Hub) Unregister(client *Client) {
 	h.unregister <- client
 }
 
-func (h *Hub) OnlineUser(userID string) (*Client, bool) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for client := range h.userIndex[userID] {
-		return client, true
-	}
-	return nil, false
-}
-
 func (h *Hub) publishAll(message Message) {
 	h.mu.RLock()
 	clients := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
 		clients = append(clients, client)
 	}
-	message.OnlineCount = len(clients)
 	h.mu.RUnlock()
 
 	payload, err := MarshalMessage(message)
@@ -104,7 +93,6 @@ func (h *Hub) publishAll(message Message) {
 
 func (h *Hub) publishUsers(message Message, userIDs []string) {
 	h.mu.RLock()
-	clientCount := len(h.clients)
 	targets := make([]*Client, 0)
 	seenUsers := make(map[string]bool)
 	seenClients := make(map[*Client]bool)
@@ -123,7 +111,6 @@ func (h *Hub) publishUsers(message Message, userIDs []string) {
 	}
 	h.mu.RUnlock()
 
-	message.OnlineCount = clientCount
 	payload, err := MarshalMessage(message)
 	if err != nil {
 		log.Printf("failed to marshal websocket message: %v", err)
@@ -157,12 +144,11 @@ func (h *Hub) removeClient(client *Client, closeSend bool) {
 			delete(h.userIndex, client.UserID)
 		}
 	}
-	clientCount := len(h.clients)
 	h.mu.Unlock()
 
 	if closeSend {
 		close(client.send)
 	}
 	log.Printf("web client disconnected: %s", client.Username)
-	h.publishAll(NewUsersMessage(clientCount))
+	h.publishAll(NewUsersMessage())
 }

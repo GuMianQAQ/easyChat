@@ -1,9 +1,9 @@
 package chatstore
 
 import (
-	"errors"
 	"time"
 
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"gorm.io/gorm"
@@ -14,6 +14,7 @@ type VotePayload struct {
 	ConversationID string              `json:"conversationId"`
 	CreatorID      string              `json:"creatorId"`
 	Question       string              `json:"question"`
+	VoteType       string              `json:"voteType"`
 	AllowMulti     bool                `json:"allowMulti"`
 	Anonymous      bool                `json:"anonymous"`
 	Deadline       *string             `json:"deadline,omitempty"`
@@ -29,30 +30,34 @@ type VoteOptionPayload struct {
 	VoteCount  int    `json:"voteCount"`
 }
 
-func (s *Service) CreateVote(userID, conversationID, question string, options []string, allowMulti, anonymous bool, deadline *time.Time) (*VotePayload, error) {
+func (s *Service) CreateVote(userID, conversationID, question, voteType string, options []string, anonymous bool, deadline *time.Time) (*VotePayload, error) {
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {
 		return nil, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, errors.New("当前会话不是群聊")
+		return nil, apperrors.ErrNotGroupConversation
 	}
 
 	if allowed, err := s.CheckPermission(userID, conversationID, "who_can_create_vote"); err != nil {
 		return nil, err
 	} else if !allowed {
-		return nil, errors.New("只有管理员可以发起投票")
+		return nil, apperrors.ErrOnlyAdminCanVote
 	}
 
 	if len(options) < 2 {
-		return nil, errors.New("至少需要两个选项")
+		return nil, apperrors.ErrAtLeastTwoOptions
 	}
+
+	// Derive AllowMulti from VoteType
+	allowMulti := voteType == "multi"
 
 	vote := Vote{
 		ID:             uid.New("vote"),
 		ConversationID: conversationID,
 		CreatorID:      userID,
 		Question:       question,
+		VoteType:       voteType,
 		AllowMulti:     allowMulti,
 		Anonymous:      anonymous,
 		Deadline:       deadline,
@@ -83,6 +88,7 @@ func (s *Service) CreateVote(userID, conversationID, question string, options []
 		ConversationID: vote.ConversationID,
 		CreatorID:      vote.CreatorID,
 		Question:       vote.Question,
+		VoteType:       vote.VoteType,
 		AllowMulti:     vote.AllowMulti,
 		Anonymous:      vote.Anonymous,
 		CreatedAt:      formatTime(vote.CreatedAt),
@@ -148,6 +154,7 @@ func (s *Service) GetVotesByConversation(userID, conversationID string) ([]VoteP
 			ConversationID: vote.ConversationID,
 			CreatorID:      vote.CreatorID,
 			Question:       vote.Question,
+			VoteType:       vote.VoteType,
 			AllowMulti:     vote.AllowMulti,
 			Anonymous:      vote.Anonymous,
 			CreatedAt:      formatTime(vote.CreatedAt),
@@ -174,11 +181,11 @@ func (s *Service) GetVotesByConversation(userID, conversationID string) ([]VoteP
 func (s *Service) CastVote(userID, voteID string, optionIDs []string) error {
 	var vote Vote
 	if err := s.db.Where("id = ?", voteID).First(&vote).Error; err != nil {
-		return errors.New("投票不存在")
+		return apperrors.ErrVoteNotFound
 	}
 
 	if vote.Deadline != nil && vote.Deadline.Before(time.Now()) {
-		return errors.New("投票已截止")
+		return apperrors.ErrVoteEnded
 	}
 
 	if _, err := s.memberRecord(userID, vote.ConversationID); err != nil {
@@ -190,11 +197,11 @@ func (s *Service) CastVote(userID, voteID string, optionIDs []string) error {
 		return err
 	}
 	if len(validOptions) != len(optionIDs) {
-		return errors.New("存在无效的选项")
+		return apperrors.ErrInvalidOptions
 	}
 
 	if !vote.AllowMulti && len(optionIDs) > 1 {
-		return errors.New("该投票为单选")
+		return apperrors.ErrSingleChoiceOnly
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -220,11 +227,11 @@ func (s *Service) CastVote(userID, voteID string, optionIDs []string) error {
 func (s *Service) Unvote(userID, voteID string) error {
 	var vote Vote
 	if err := s.db.Where("id = ?", voteID).First(&vote).Error; err != nil {
-		return errors.New("投票不存在")
+		return apperrors.ErrVoteNotFound
 	}
 
 	if vote.Deadline != nil && vote.Deadline.Before(time.Now()) {
-		return errors.New("投票已截止，无法修改")
+		return apperrors.ErrVoteCannotModify
 	}
 
 	result := s.db.Where("vote_id = ? AND user_id = ?", voteID, userID).Delete(&VoteRecord{})
@@ -232,7 +239,7 @@ func (s *Service) Unvote(userID, voteID string) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("你尚未投票")
+		return apperrors.ErrNotVoted
 	}
 	return nil
 }
@@ -240,7 +247,7 @@ func (s *Service) Unvote(userID, voteID string) error {
 func (s *Service) GetVote(userID, voteID string) (*VotePayload, error) {
 	var vote Vote
 	if err := s.db.Where("id = ?", voteID).First(&vote).Error; err != nil {
-		return nil, errors.New("投票不存在")
+		return nil, apperrors.ErrVoteNotFound
 	}
 
 	if _, err := s.memberRecord(userID, vote.ConversationID); err != nil {
@@ -267,6 +274,7 @@ func (s *Service) GetVote(userID, voteID string) (*VotePayload, error) {
 		ConversationID: vote.ConversationID,
 		CreatorID:      vote.CreatorID,
 		Question:       vote.Question,
+		VoteType:       vote.VoteType,
 		AllowMulti:     vote.AllowMulti,
 		Anonymous:      vote.Anonymous,
 		CreatedAt:      formatTime(vote.CreatedAt),

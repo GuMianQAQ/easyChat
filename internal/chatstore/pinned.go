@@ -1,9 +1,9 @@
 package chatstore
 
 import (
-	"errors"
 	"time"
 
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 )
 
@@ -14,7 +14,7 @@ func (s *Service) PinMessage(userID, conversationID, messageID string) error {
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -22,22 +22,22 @@ func (s *Service) PinMessage(userID, conversationID, messageID string) error {
 		return err
 	}
 	if member == nil {
-		return errors.New("当前用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 	if member.Role != "owner" && member.Role != "admin" {
-		return errors.New("只有管理员可以标记精华消息")
+		return apperrors.ErrAdminOnly
 	}
 
 	// Verify message exists in this conversation
 	var msg Message
 	if err := s.db.Where("id = ? AND conversation_id = ?", messageID, conversationID).First(&msg).Error; err != nil {
-		return errors.New("消息不存在")
+		return apperrors.ErrMessageNotFound
 	}
 
 	// Check if already pinned
 	var existing GroupPinnedMessage
 	if err := s.db.Where("conversation_id = ? AND message_id = ?", conversationID, messageID).First(&existing).Error; err == nil {
-		return errors.New("该消息已是精华消息")
+		return apperrors.ErrBadRequest
 	}
 
 	pin := GroupPinnedMessage{
@@ -57,7 +57,7 @@ func (s *Service) UnpinMessage(userID, conversationID, messageID string) error {
 		return err
 	}
 	if conversation.Type != GroupConversationType {
-		return errors.New("当前会话不是群聊")
+		return apperrors.ErrNotGroupConversation
 	}
 
 	member, err := s.memberRecord(userID, conversationID)
@@ -65,10 +65,10 @@ func (s *Service) UnpinMessage(userID, conversationID, messageID string) error {
 		return err
 	}
 	if member == nil {
-		return errors.New("当前用户不在该群聊中")
+		return apperrors.ErrUserNotInGroup
 	}
 	if member.Role != "owner" && member.Role != "admin" {
-		return errors.New("只有管理员可以取消精华消息")
+		return apperrors.ErrAdminOnly
 	}
 
 	result := s.db.Where("conversation_id = ? AND message_id = ?", conversationID, messageID).Delete(&GroupPinnedMessage{})
@@ -76,7 +76,7 @@ func (s *Service) UnpinMessage(userID, conversationID, messageID string) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("该消息不是精华消息")
+		return apperrors.ErrBadRequest
 	}
 	return nil
 }
@@ -88,7 +88,7 @@ func (s *Service) GetPinnedMessages(userID, conversationID string) ([]MessagePay
 		return nil, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, errors.New("当前会话不是群聊")
+		return nil, apperrors.ErrNotGroupConversation
 	}
 
 	var pins []GroupPinnedMessage

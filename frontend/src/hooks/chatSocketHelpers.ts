@@ -38,11 +38,13 @@ export function normalizeQuote(quote?: MessageQuote | null): MessageQuote | null
     return null;
   }
 
+  const messageType = quote.messageType === "image" ? "image" : quote.messageType === "file" ? "file" : "text";
+
   return {
     id: safeText(quote.id),
     username: safeText(quote.username),
     content: safeText(quote.content),
-    messageType: quote.messageType === "image" ? "image" : "text",
+    messageType,
     time: safeText(quote.time),
   };
 }

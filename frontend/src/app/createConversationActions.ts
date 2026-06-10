@@ -33,6 +33,7 @@ import {
   updateGroupBotEnabled,
   updateGroupConversation,
   uploadImage,
+  uploadFile,
 } from "../utils/chatApi";
 import {
   DEFAULT_AUTH_DRAFT,
@@ -41,7 +42,7 @@ import {
   upsertConversation,
 } from "../utils/appHelpers";
 import { isAuthExpiredError } from "../utils/apiError";
-import { captureDisplayFrame, dataUrlToBlob } from "../utils/media";
+import { captureScreen, dataUrlToBlob } from "../utils/media";
 
 type HistoryState = Record<
   string,
@@ -96,6 +97,14 @@ interface CreateConversationActionsOptions {
     content: string;
     quote?: MessageQuote | null;
   }) => boolean;
+  sendFileMessage: (options: {
+    conversationId: string;
+    messageScope: "private" | "group";
+    targetUserId?: string;
+    targetName?: string;
+    content: string;
+    quote?: MessageQuote | null;
+  }) => boolean;
   addSystemNotice: (options: {
     eventType: string;
     title: string;
@@ -118,6 +127,7 @@ export function createConversationActions({
   prependConversationMessages,
   sendTextMessage,
   sendImageMessage,
+  sendFileMessage,
   addSystemNotice,
 }: CreateConversationActionsOptions) {
   const { activeConversationId, conversations, visibleActiveConversation, historyState } = chatState;
@@ -129,8 +139,6 @@ export function createConversationActions({
     localDataActions;
   const handleAuthError = (error: unknown) => {
     if (isAuthExpiredError(error)) {
-      console.warn("[AuthDebug] 401 detected in createConversationActions, storedToken length:", storedToken?.length ?? 0);
-      console.trace("[AuthDebug] handleAuthError stack trace");
       handleAuthExpired();
       return true;
     }
@@ -396,16 +404,36 @@ export function createConversationActions({
     }
   };
 
-  const handleCaptureScreen = async (quote?: MessageQuote | null) => {
+  const handleSendFile = async (file: File, quote?: MessageQuote | null) => {
+    if (!storedToken) {
+      handleAuthExpired();
+      return false;
+    }
+
     try {
-      const imageData = await captureDisplayFrame();
-      if (!imageData) {
-        return false;
-      }
-      return await handleSendImage(imageData, quote);
+      const result = await uploadFile(storedToken, file, file.name);
+      return sendFileMessage(buildSendOptions(result.fileUrl, quote));
     } catch (error) {
       if (handleAuthError(error)) {
         return false;
+      }
+      addSystemNotice({
+        eventType: "upload-file-failed",
+        title: "文件",
+        content: error instanceof Error ? error.message : "文件上传失败",
+        level: "error",
+      });
+      return false;
+    }
+  };
+
+  const handleCaptureScreen = async (hideWindow: boolean): Promise<string | null> => {
+    try {
+      const imageData = await captureScreen(hideWindow);
+      return imageData;
+    } catch (error) {
+      if (handleAuthError(error)) {
+        return null;
       }
       addSystemNotice({
         eventType: "capture-error",
@@ -413,7 +441,7 @@ export function createConversationActions({
         content: error instanceof Error ? error.message : "截图失败",
         level: "error",
       });
-      return false;
+      return null;
     }
   };
 
@@ -710,6 +738,7 @@ export function createConversationActions({
     handleUpdateGroupBotEnabled,
     handleSendText,
     handleSendImage,
+    handleSendFile,
     handleCaptureScreen,
     handleUpdateConversationSettings,
     handleClearConversation,

@@ -2,11 +2,11 @@ package moments
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"unicode/utf8"
 
 	"easyChat/internal/auth"
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/social"
 	"easyChat/internal/uid"
 
@@ -26,10 +26,10 @@ func (s *Service) CreatePost(userID string, input CreateMomentInput) (MomentItem
 	userID = strings.TrimSpace(userID)
 	content := strings.TrimSpace(input.Content)
 	if content == "" {
-		return MomentItem{}, errors.New("内容不能为空")
+		return MomentItem{}, apperrors.ErrContentEmpty
 	}
 	if utf8.RuneCountInString(content) > 5000 {
-		return MomentItem{}, errors.New("内容太长")
+		return MomentItem{}, apperrors.ErrContentTooLong
 	}
 
 	images := input.Images
@@ -56,7 +56,7 @@ func (s *Service) CreatePost(userID string, input CreateMomentInput) (MomentItem
 		return MomentItem{}, err
 	}
 	if len(items) == 0 {
-		return MomentItem{}, errors.New("动态创建失败")
+		return MomentItem{}, apperrors.ErrMomentCreateFailed
 	}
 	return items[0], nil
 }
@@ -64,7 +64,7 @@ func (s *Service) CreatePost(userID string, input CreateMomentInput) (MomentItem
 func (s *Service) GetFeed(userID string) ([]MomentItem, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return nil, errors.New("缺少用户信息")
+		return nil, apperrors.ErrMissingUserInfo
 	}
 
 	friends, err := s.social.ListFriends(userID)
@@ -94,7 +94,7 @@ func (s *Service) GetProfileFeed(viewerID, targetID string) ([]MomentItem, error
 	viewerID = strings.TrimSpace(viewerID)
 	targetID = strings.TrimSpace(targetID)
 	if viewerID == "" || targetID == "" {
-		return nil, errors.New("缺少用户信息")
+		return nil, apperrors.ErrMissingUserInfo
 	}
 	if viewerID == targetID {
 		return s.GetFeed(viewerID)
@@ -105,7 +105,7 @@ func (s *Service) GetProfileFeed(viewerID, targetID string) ([]MomentItem, error
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("无权查看该朋友圈")
+		return nil, apperrors.ErrNoPermissionViewMoment
 	}
 
 	var posts []Moment
@@ -121,13 +121,13 @@ func (s *Service) DeletePost(userID, momentID string) error {
 
 	var post Moment
 	if err := s.db.Where("id = ?", momentID).First(&post).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("动态不存在")
+		if err == gorm.ErrRecordNotFound {
+			return apperrors.ErrMomentNotFound
 		}
 		return err
 	}
 	if post.AuthorID != userID {
-		return errors.New("只能删除自己的动态")
+		return apperrors.ErrCanOnlyDeleteSelf
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -171,10 +171,10 @@ func (s *Service) AddComment(userID, momentID string, input AddCommentInput) (Co
 	momentID = strings.TrimSpace(momentID)
 	content := strings.TrimSpace(input.Content)
 	if content == "" {
-		return CommentItem{}, errors.New("评论内容不能为空")
+		return CommentItem{}, apperrors.ErrCommentEmpty
 	}
 	if utf8.RuneCountInString(content) > 1000 {
-		return CommentItem{}, errors.New("评论太长")
+		return CommentItem{}, apperrors.ErrCommentTooLong
 	}
 
 	if err := s.ensurePostVisible(userID, momentID); err != nil {
@@ -204,8 +204,8 @@ func (s *Service) DeleteComment(userID, commentID string) error {
 
 	var comment MomentComment
 	if err := s.db.Where("id = ?", commentID).First(&comment).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("评论不存在")
+		if err == gorm.ErrRecordNotFound {
+			return apperrors.ErrCommentNotFound
 		}
 		return err
 	}
@@ -215,7 +215,7 @@ func (s *Service) DeleteComment(userID, commentID string) error {
 		return err
 	}
 	if comment.AuthorID != userID && post.AuthorID != userID {
-		return errors.New("无权删除此评论")
+		return apperrors.ErrNoPermissionDeleteComment
 	}
 
 	return s.db.Delete(&comment).Error
@@ -224,8 +224,8 @@ func (s *Service) DeleteComment(userID, commentID string) error {
 func (s *Service) ensurePostVisible(userID, momentID string) error {
 	var post Moment
 	if err := s.db.Where("id = ?", momentID).First(&post).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("动态不存在")
+		if err == gorm.ErrRecordNotFound {
+			return apperrors.ErrMomentNotFound
 		}
 		return err
 	}
@@ -238,7 +238,7 @@ func (s *Service) ensurePostVisible(userID, momentID string) error {
 		return err
 	}
 	if !ok {
-		return errors.New("无权查看此动态")
+		return apperrors.ErrNoPermissionViewMoment2
 	}
 	return nil
 }
@@ -262,7 +262,7 @@ func (s *Service) isVisibleFriend(viewerID, authorID string) (bool, error) {
 
 	blocked, err = s.isBlockedBy(authorID, viewerID)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	if blocked {
 		return false, nil
@@ -274,7 +274,7 @@ func (s *Service) isVisibleFriend(viewerID, authorID string) (bool, error) {
 func (s *Service) isBlockedBy(userID, targetID string) (bool, error) {
 	var friendship social.Friendship
 	err := s.db.Where("user_id = ? AND friend_id = ?", userID, targetID).First(&friendship).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err == gorm.ErrRecordNotFound {
 		return false, nil
 	}
 	if err != nil {
@@ -401,7 +401,7 @@ func (s *Service) lookupAuthors(userIDs []string) (map[string]AuthorInfo, error)
 
 func buildCommentItem(comment MomentComment, viewerID string, author AuthorInfo) (CommentItem, error) {
 	if author.ID == "" {
-		return CommentItem{}, errors.New("评论作者不存在")
+		return CommentItem{}, apperrors.ErrCommentAuthorNotFound
 	}
 	return CommentItem{
 		ID:        comment.ID,

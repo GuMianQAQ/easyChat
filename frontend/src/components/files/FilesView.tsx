@@ -225,7 +225,7 @@ function FilesDetail({
         </div>
       ) : null}
 
-      <ImagePreviewModal open={Boolean(previewUrl)} src={previewUrl} onClose={() => setPreviewUrl("")} />
+      <ImagePreviewModal open={Boolean(previewUrl)} images={previewUrl ? [previewUrl] : []} currentIndex={0} onClose={() => setPreviewUrl("")} />
     </div>
   );
 }

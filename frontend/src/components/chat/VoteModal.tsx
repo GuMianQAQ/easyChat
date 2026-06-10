@@ -15,7 +15,7 @@ interface VoteModalProps {
   onNotice: (title: string, content: string, level?: "info" | "success" | "warning" | "error") => void;
 }
 
-export default function VoteModal({ token, conversationId, conversationName, myRole, onClose, onNotice }: VoteModalProps) {
+export default function VoteModal({ token, conversationId, conversationName, onClose, onNotice }: VoteModalProps) {
   const [votes, setVotes] = useState<Vote[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -58,23 +58,31 @@ export default function VoteModal({ token, conversationId, conversationName, myR
               <div className="feature-modal-empty">加载中...</div>
             ) : votes.length === 0 ? (
               <div className="feature-modal-empty">
-                <VoteIcon size={32} />
+                <div className="feature-modal-empty-icon">
+                  <VoteIcon size={48} />
+                </div>
                 <p>暂无投票</p>
+                <button type="button" className="feature-modal-create-btn" onClick={() => setShowCreate(true)}>
+                  <Plus size={14} />
+                  发起投票
+                </button>
               </div>
             ) : (
               votes.map((vote) => (
                 <div key={vote.id} className="feature-modal-item">
-                  <VoteCard token={token} vote={vote} myRole={myRole} onNotice={onNotice} onRefresh={loadVotes} />
+                  <VoteCard token={token} vote={vote} onNotice={onNotice} onRefresh={loadVotes} />
                 </div>
               ))
             )}
           </div>
-          <div className="feature-modal-footer">
-            <button type="button" className="feature-modal-create-btn" onClick={() => setShowCreate(true)}>
-              <Plus size={14} />
-              发起投票
-            </button>
-          </div>
+          {votes.length > 0 && (
+            <div className="feature-modal-footer">
+              <button type="button" className="feature-modal-create-btn" onClick={() => setShowCreate(true)}>
+                <Plus size={14} />
+                发起投票
+              </button>
+            </div>
+          )}
         </>
       )}
     </GroupFeatureModal>

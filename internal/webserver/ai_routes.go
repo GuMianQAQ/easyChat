@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"easyChat/internal/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,10 +26,7 @@ func (s *Server) registerAIRoutes(api *gin.RouterGroup) {
 }
 
 func (s *Server) handleAIStream(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	query := strings.TrimSpace(c.Query("query"))
 	if query == "" {
@@ -77,11 +76,7 @@ func (s *Server) handleAIStream(c *gin.Context) {
 }
 
 func (s *Server) handleAIChat(c *gin.Context) {
-	user, err := s.Auth.UserFromToken(bearerToken(c))
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	user := c.MustGet("user").(auth.PublicUser)
 
 	var req struct {
 		Content        string `json:"content"`
@@ -102,10 +97,7 @@ func (s *Server) handleAIChat(c *gin.Context) {
 }
 
 func (s *Server) handleAITranslate(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	var req struct {
 		Text       string `json:"text"`
@@ -125,10 +117,7 @@ func (s *Server) handleAITranslate(c *gin.Context) {
 }
 
 func (s *Server) handleAISummarize(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	var req struct {
 		Texts []string `json:"texts"`
@@ -147,10 +136,7 @@ func (s *Server) handleAISummarize(c *gin.Context) {
 }
 
 func (s *Server) handleAIComplete(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	var req struct {
 		Text        string `json:"text"`
@@ -170,10 +156,7 @@ func (s *Server) handleAIComplete(c *gin.Context) {
 }
 
 func (s *Server) handleAIPredictQuestion(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	var req struct {
 		Text string `json:"text"`
@@ -192,10 +175,7 @@ func (s *Server) handleAIPredictQuestion(c *gin.Context) {
 }
 
 func (s *Server) handleAISearch(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	query := strings.TrimSpace(c.Query("q"))
 	conversationID := strings.TrimSpace(c.Query("conversationId"))
@@ -213,10 +193,7 @@ func (s *Server) handleAISearch(c *gin.Context) {
 }
 
 func (s *Server) handleAIStats(c *gin.Context) {
-	if _, err := s.Auth.UserFromToken(bearerToken(c)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	_ = c.MustGet("user").(auth.PublicUser)
 
 	c.JSON(http.StatusOK, s.AI.GetStats().Snapshot())
 }

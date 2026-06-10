@@ -17,7 +17,6 @@ const (
 	errUseDismissForOwner       = "群主请使用解散群聊功能"
 	errDismissGroupOwnerOnly    = "只有群主可以解散群聊"
 	errAdminOnly                = "只有管理员可以执行此操作"
-	errMemberMuted              = "你已被禁言，无法发送消息"
 	msgFriendBlocked            = "已加入黑名单"
 	msgFriendUnblocked          = "已移出黑名单"
 )

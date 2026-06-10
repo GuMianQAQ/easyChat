@@ -1,7 +1,6 @@
 package chatstore
 
 import (
-	"log"
 	"os"
 	"time"
 
@@ -110,6 +109,7 @@ type Vote struct {
 	ConversationID string    `gorm:"index;size:64;not null"`
 	CreatorID      string    `gorm:"size:64;not null"`
 	Question       string    `gorm:"type:text;not null"`
+	VoteType       string    `gorm:"size:16;default:'single'"`
 	AllowMulti     bool      `gorm:"default:false"`
 	Anonymous      bool      `gorm:"default:false"`
 	Deadline       *time.Time
@@ -136,6 +136,7 @@ type Solitaire struct {
 	ConversationID string    `gorm:"index;size:64;not null"`
 	CreatorID      string    `gorm:"size:64;not null"`
 	Title          string    `gorm:"size:128;not null"`
+	Format         string    `gorm:"size:255"`
 	CreatedAt      time.Time
 }
 
@@ -146,6 +147,29 @@ type SolitaireItem struct {
 	Content     string    `gorm:"type:text;not null"`
 	SortOrder   int       `gorm:"default:0"`
 	CreatedAt   time.Time
+}
+
+type Album struct {
+	ID             string    `gorm:"primaryKey"`
+	ConversationID string    `gorm:"index;size:64;not null"`
+	Name           string    `gorm:"size:128;not null"`
+	Description    string    `gorm:"size:255"`
+	CoverURL       string    `gorm:"type:text"`
+	PhotoCount     int       `gorm:"default:0"`
+	CreatedBy      string    `gorm:"size:64;not null"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type AlbumPhoto struct {
+	ID         string    `gorm:"primaryKey"`
+	AlbumID    string    `gorm:"index;size:64;not null"`
+	FileURL    string    `gorm:"type:text;not null"`
+	FileName   string    `gorm:"size:255"`
+	FileSize   int64
+	MimeType   string    `gorm:"size:128"`
+	UploadedBy string    `gorm:"size:64;not null"`
+	CreatedAt  time.Time
 }
 
 type FilePayload struct {
@@ -180,7 +204,6 @@ type MessagePayload struct {
 	TargetName     string        `json:"targetName,omitempty"`
 	Content        string        `json:"content"`
 	CreatedAt      string        `json:"createdAt"`
-	OnlineCount    int           `json:"onlineCount"`
 	Avatar         string        `json:"avatar"`
 	Quote          *QuotePayload `json:"quote,omitempty"`
 	Revoked        bool          `json:"revoked,omitempty"`
@@ -275,8 +298,6 @@ type PersistMessageInput struct {
 	ConversationID string
 	MessageScope   string
 	MessageType    string
-	TargetUserID   string
-	TargetName     string
 	Content        string
 	Quote          *QuotePayload
 }
@@ -298,23 +319,8 @@ func NewService(db *gorm.DB, uploadsDir string, cfg Config) (*Service, error) {
 	}
 
 	service := &Service{db: db, uploadsDir: uploadsDir, config: cfg}
-	if err := service.cleanupLegacyPublicConversation(); err != nil {
-		return nil, err
-	}
-	if err := service.cleanupAIFromPrivateConversations(); err != nil {
-		log.Printf("warning: failed to cleanup AI from private conversations: %v", err)
-	}
 	if err := service.ensureBaseConversations(); err != nil {
 		return nil, err
 	}
-	if err := service.ensureGroupPermissions(); err != nil {
-		log.Printf("warning: failed to initialize group permissions: %v", err)
-	}
 	return service, nil
-}
-
-func (s *Service) ensureGroupPermissions() error {
-	return s.db.Model(&Conversation{}).
-		Where("type = ? AND (permissions IS NULL OR permissions = '')", GroupConversationType).
-		Update("permissions", DefaultGroupPermissions).Error
 }

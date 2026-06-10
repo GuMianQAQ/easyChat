@@ -20,7 +20,7 @@ export default function VoteCreateForm({
 }: VoteCreateFormProps) {
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
-  const [allowMulti, setAllowMulti] = useState(false);
+  const [voteType, setVoteType] = useState<"single" | "multi">("single");
   const [anonymous, setAnonymous] = useState(false);
   const [deadline, setDeadline] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -64,9 +64,9 @@ export default function VoteCreateForm({
         conversationId,
         question.trim(),
         validOptions,
-        allowMulti,
         anonymous,
         deadline || undefined,
+        voteType,
       );
       onNotice("投票", "创建成功", "success");
       onCreated(vote);
@@ -88,10 +88,30 @@ export default function VoteCreateForm({
 
       <div className="vote-form-body">
         <div className="vote-form-field">
+          <label>投票类型</label>
+          <div className="vote-type-selector">
+            <button
+              type="button"
+              className={`vote-type-btn ${voteType === "single" ? "active" : ""}`}
+              onClick={() => setVoteType("single")}
+            >
+              单选
+            </button>
+            <button
+              type="button"
+              className={`vote-type-btn ${voteType === "multi" ? "active" : ""}`}
+              onClick={() => setVoteType("multi")}
+            >
+              多选
+            </button>
+          </div>
+        </div>
+
+        <div className="vote-form-field">
           <label>问题</label>
           <input
             type="text"
-            placeholder="输入投票问题"
+            placeholder="例如：今晚吃什么？"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             maxLength={200}
@@ -100,51 +120,73 @@ export default function VoteCreateForm({
 
         <div className="vote-form-field">
           <label>选项</label>
-          {options.map((opt, i) => (
-            <div key={i} className="vote-option-input">
-              <input
-                type="text"
-                placeholder={`选项 ${i + 1}`}
-                value={opt}
-                onChange={(e) => handleOptionChange(i, e.target.value)}
-                maxLength={100}
-              />
-              <button type="button" onClick={() => handleRemoveOption(i)}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
+          <div className="vote-options-list">
+            {options.map((opt, i) => (
+              <div key={i} className="vote-option-card">
+                <input
+                  type="text"
+                  placeholder={`选项 ${i + 1}`}
+                  value={opt}
+                  onChange={(e) => handleOptionChange(i, e.target.value)}
+                  maxLength={100}
+                />
+                <button type="button" className="vote-option-delete" onClick={() => handleRemoveOption(i)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
           <button type="button" className="vote-add-option" onClick={handleAddOption}>
             <Plus size={14} /> 添加选项
           </button>
         </div>
 
-        <div className="vote-form-options">
-          <label className="vote-checkbox">
-            <input
-              type="checkbox"
-              checked={allowMulti}
-              onChange={(e) => setAllowMulti(e.target.checked)}
-            />
-            <span>允许多选</span>
-          </label>
-          <label className="vote-checkbox">
-            <input
-              type="checkbox"
-              checked={anonymous}
-              onChange={(e) => setAnonymous(e.target.checked)}
-            />
-            <span>匿名投票</span>
-          </label>
-        </div>
+        <div className="vote-form-divider" />
 
-        <div className="vote-form-field">
-          <label>截止时间（可选）</label>
-          <input
-            type="datetime-local"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-          />
+        <div className="vote-form-settings">
+          <label className="vote-setting-item">
+            <div className="vote-setting-info">
+              <input
+                type="checkbox"
+                checked={anonymous}
+                onChange={(e) => setAnonymous(e.target.checked)}
+              />
+              <div className="vote-setting-text">
+                <span className="vote-setting-label">匿名投票</span>
+                <span className="vote-setting-desc">投票后不显示投票人</span>
+              </div>
+            </div>
+          </label>
+          <label className="vote-setting-item">
+            <div className="vote-setting-info">
+              <input
+                type="checkbox"
+                checked={!!deadline}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                    const pad = (n: number) => String(n).padStart(2, '0');
+                    const local = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    setDeadline(local);
+                  } else {
+                    setDeadline("");
+                  }
+                }}
+              />
+              <div className="vote-setting-text">
+                <span className="vote-setting-label">截止时间</span>
+                <span className="vote-setting-desc">设置投票截止时间</span>
+              </div>
+            </div>
+            {deadline && (
+              <input
+                type="datetime-local"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="vote-deadline-input"
+              />
+            )}
+          </label>
         </div>
       </div>
 

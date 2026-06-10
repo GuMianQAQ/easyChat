@@ -1,7 +1,38 @@
-import { cp, mkdir, rm, access, writeFile } from "node:fs/promises";
+import { mkdir, rm, access, writeFile, readdir, stat, copyFile } from "node:fs/promises";
 import path from "node:path";
 import { constants as fsConstants } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
+
+const SKIP_BASENAMES = new Set(["default_app.asar"]);
+
+async function cpFiltered(src, dest) {
+  const entries = await readdir(src, { withFileTypes: true });
+  await mkdir(dest, { recursive: true });
+  for (const entry of entries) {
+    if (SKIP_BASENAMES.has(entry.name)) continue;
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await cpFiltered(srcPath, destPath);
+    } else {
+      await copyFile(srcPath, destPath);
+    }
+  }
+}
+
+async function forceRmDir(dir) {
+  // Use cmd to forcefully delete any locked files first
+  try {
+    execSync(`cmd /c "del /f /s /q "${dir}" >nul 2>&1"`, { stdio: "ignore" });
+  } catch {}
+  try {
+    execSync(`cmd /c "rmdir /s /q "${dir}" >nul 2>&1"`, { stdio: "ignore" });
+  } catch {}
+  // Final cleanup with Node.js in case cmd left something
+  try {
+    await rm(dir, { recursive: true, force: true });
+  } catch {}
+}
 
 const projectRoot = path.resolve(process.cwd());
 const releaseDir = path.join(projectRoot, "release");
@@ -45,27 +76,25 @@ async function main() {
     await ensureExists(fallbackSmallIconSource, "Tray/window fallback icon");
   }
 
-  await rm(runtimeDir, { recursive: true, force: true });
+  await forceRmDir(runtimeDir);
   await mkdir(runtimeDir, { recursive: true });
-  await cp(sourceRuntimeDir, runtimeDir, { recursive: true });
+  await cpFiltered(sourceRuntimeDir, runtimeDir);
 
   await mkdir(appDir, { recursive: true });
-  await rm(appDir, { recursive: true, force: true });
+  await forceRmDir(appDir);
   await mkdir(appDir, { recursive: true });
   await mkdir(appAssetsDir, { recursive: true });
 
-  await cp(path.join(projectRoot, "dist"), appDir, { recursive: true });
-  await cp(path.join(projectRoot, "dist-electron"), path.join(appDir, "dist-electron"), {
-    recursive: true,
-  });
-  await cp(iconAssetsSource, appAssetsDir, { recursive: true });
+  await cpFiltered(path.join(projectRoot, "dist"), appDir);
+  await cpFiltered(path.join(projectRoot, "dist-electron"), path.join(appDir, "dist-electron"));
+  await cpFiltered(iconAssetsSource, appAssetsDir);
   await rm(path.join(appDir, "package.json"), { force: true });
   await writeFile(
     path.join(appDir, "package.json"),
     `${JSON.stringify(packagedPackageJson, null, 2)}\n`,
   );
 
-  await cp(path.join(runtimeDir, "electron.exe"), packagedExe);
+  await copyFile(path.join(runtimeDir, "electron.exe"), packagedExe);
 
   await new Promise((resolve, reject) => {
     const child = spawn(rceditPath, [packagedExe, "--set-icon", mainIconSource], {

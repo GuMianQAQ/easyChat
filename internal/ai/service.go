@@ -218,10 +218,6 @@ func (s *Service) HandleStream(ctx context.Context, query string) (io.Reader, er
 	})
 }
 
-func (s *Service) EmbedText(ctx context.Context, text string) ([]float64, error) {
-	return s.provider.Embed(ctx, text)
-}
-
 func (s *Service) Translate(ctx context.Context, text, targetLang string) (string, error) {
 	if !s.config.Enable.Tools {
 		return "", fmt.Errorf("AI 工具功能已关闭")
@@ -291,12 +287,10 @@ func (s *Service) Complete(ctx context.Context, text, granularity string) (strin
 		MaxTokens:   s.config.Complete.MaxTokens,
 	})
 	if err != nil {
-		log.Printf("[Complete] AI error: %v", err)
 		return "", nil
 	}
 
 	completion := strings.TrimSpace(resp.Content)
-	log.Printf("[Complete] AI response: text=%q, granularity=%s, completion=%q", text, granularity, completion)
 
 	s.stats.RecordComplete()
 	return completion, nil
@@ -316,23 +310,18 @@ func (s *Service) PredictQuestion(ctx context.Context, text string) (string, str
 		MaxTokens:   s.config.Predict.MaxTokens,
 	})
 	if err != nil {
-		log.Printf("[PredictQuestion] AI error: %v", err)
 		return "", "", nil
 	}
 
 	rawContent := strings.TrimSpace(resp.Content)
-	log.Printf("[PredictQuestion] AI raw response: %q", rawContent)
 
 	var result struct {
 		Question string `json:"question"`
 		Answer   string `json:"answer"`
 	}
 	if err := json.Unmarshal([]byte(rawContent), &result); err != nil {
-		log.Printf("[PredictQuestion] JSON parse error: %v, raw content: %q", err, rawContent)
 		return "", "", nil
 	}
-
-	log.Printf("[PredictQuestion] parsed result: question=%q, answer=%q", result.Question, result.Answer)
 
 	s.stats.RecordPredict()
 	return strings.TrimSpace(result.Question), strings.TrimSpace(result.Answer), nil
@@ -366,18 +355,6 @@ func (s *Service) GetConversationHistory(userID, conversationID string, limit in
 		messages = append(messages, Message{Role: record.Role, Content: record.Content})
 	}
 	return messages
-}
-
-func (s *Service) SaveEmbedding(conversationID, messageID, content string, embedding []float64) error {
-	record := AIEmbedding{
-		ID:             fmt.Sprintf("ai-emb-%d", time.Now().UnixNano()),
-		ConversationID: conversationID,
-		MessageID:      messageID,
-		Content:        content,
-		Embedding:      encodeEmbedding(embedding),
-		CreatedAt:      time.Now(),
-	}
-	return s.db.Create(&record).Error
 }
 
 func (s *Service) SearchHybrid(conversationID, query string, limit int) ([]SearchResultItem, error) {

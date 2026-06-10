@@ -13,6 +13,7 @@ import (
 const (
 	MessageTypeChat         = "chat"
 	MessageTypeSystem       = "system"
+	MessageTypeNotification = "notification"
 	MessageTypeUsers        = "users"
 	MessageTypeError        = "error"
 	MessageTypeRevoke       = "revoke"
@@ -25,6 +26,7 @@ const (
 
 	ChatMessageText  = "text"
 	ChatMessageImage = "image"
+	ChatMessageFile  = "file"
 
 	MaxAvatarBytes = 256 * 1024
 )
@@ -54,7 +56,6 @@ type Message struct {
 	Content        string `json:"content"`
 	CreatedAt      string `json:"createdAt"`
 	RevokedAt      string `json:"revokedAt,omitempty"`
-	OnlineCount    int    `json:"onlineCount"`
 	Avatar         string `json:"avatar"`
 	Quote          *Quote `json:"quote,omitempty"`
 	Revoked        bool   `json:"revoked,omitempty"`
@@ -131,7 +132,7 @@ func normalizeQuote(quote *Quote) *Quote {
 	}
 
 	messageType := strings.TrimSpace(quote.MessageType)
-	if messageType != ChatMessageImage {
+	if messageType != ChatMessageImage && messageType != ChatMessageFile {
 		messageType = ChatMessageText
 	}
 
@@ -144,52 +145,19 @@ func normalizeQuote(quote *Quote) *Quote {
 	}
 }
 
-func NewRevokeMessage(id, conversationID, messageScope, senderID, senderName, targetUserID string, onlineCount int) Message {
-	now := NowString()
-	return Message{
-		ID:             strings.TrimSpace(id),
-		MessageID:      strings.TrimSpace(id),
-		ConversationID: strings.TrimSpace(conversationID),
-		MessageScope:   messageScope,
-		Type:           MessageTypeRevoke,
-		MessageType:    ChatMessageText,
-		SenderID:       strings.TrimSpace(senderID),
-		SenderName:     strings.TrimSpace(senderName),
-		OperatorID:     strings.TrimSpace(senderID),
-		TargetUserID:   strings.TrimSpace(targetUserID),
-		CreatedAt:      now,
-		RevokedAt:      now,
-		OnlineCount:    onlineCount,
-	}
-}
-
-func NewPublicSystemMessage(content string, onlineCount int) Message {
-	return Message{
-		ID:             NewMessageID(),
-		ConversationID: ScopeSystem,
-		MessageScope:   ScopeSystem,
-		Type:           MessageTypeSystem,
-		MessageType:    ChatMessageText,
-		Content:        content,
-		CreatedAt:      NowString(),
-		OnlineCount:    onlineCount,
-	}
-}
-
-func NewUsersMessage(onlineCount int) Message {
+func NewUsersMessage() Message {
 	return Message{
 		ID:             NewMessageID(),
 		ConversationID: "system",
 		MessageScope:   ScopeSystem,
 		Type:           MessageTypeUsers,
 		MessageType:    ChatMessageText,
-		Content:        fmt.Sprintf("在线 %d 人", onlineCount),
+		Content:        "在线人数已更新",
 		CreatedAt:      NowString(),
-		OnlineCount:    onlineCount,
 	}
 }
 
-func NewErrorMessage(content string, onlineCount int) Message {
+func NewErrorMessage(content string) Message {
 	return Message{
 		ID:             NewMessageID(),
 		ConversationID: "system",
@@ -198,7 +166,6 @@ func NewErrorMessage(content string, onlineCount int) Message {
 		MessageType:    ChatMessageText,
 		Content:        content,
 		CreatedAt:      NowString(),
-		OnlineCount:    onlineCount,
 	}
 }
 
@@ -283,6 +250,21 @@ func ValidateInput(input ClientInput) (*ValidatedInput, error) {
 			Content:        content,
 			Quote:          normalizeQuote(input.Quote),
 		}, nil
+	case ChatMessageFile:
+		content, err := validateFileURL(strings.TrimSpace(input.Content))
+		if err != nil {
+			return nil, err
+		}
+		return &ValidatedInput{
+			ID:             id,
+			ConversationID: conversationID,
+			MessageScope:   messageScope,
+			MessageType:    ChatMessageFile,
+			TargetUserID:   targetUserID,
+			TargetName:     targetName,
+			Content:        content,
+			Quote:          normalizeQuote(input.Quote),
+		}, nil
 	default:
 		return nil, fmt.Errorf("不支持的消息类型")
 	}
@@ -300,14 +282,22 @@ func ValidateContent(content string) (string, error) {
 }
 
 func validateImageURL(value string) (string, error) {
+	return validateMediaURL(value, "图片")
+}
+
+func validateFileURL(value string) (string, error) {
+	return validateMediaURL(value, "文件")
+}
+
+func validateMediaURL(value, mediaType string) (string, error) {
 	if value == "" {
-		return "", fmt.Errorf("图片不能为空")
+		return "", fmt.Errorf("%s不能为空", mediaType)
 	}
 	if len(value) > 2048 {
-		return "", fmt.Errorf("图片内容无效")
+		return "", fmt.Errorf("%s内容无效", mediaType)
 	}
 	if !strings.HasPrefix(value, "/uploads/") {
-		return "", fmt.Errorf("图片未上传")
+		return "", fmt.Errorf("%s未上传", mediaType)
 	}
 	return value, nil
 }

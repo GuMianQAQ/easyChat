@@ -294,13 +294,13 @@ function MessageList({
           const showDivider =
             message.type === "chat" && shouldShowTimeDivider(previous?.createdAt || "", message.createdAt);
 
-          if (message.type === "system" || message.type === "error") {
+          if (message.type === "system" || message.type === "error" || message.type === "notification") {
             return (
               <div key={message.id}>
                 <div
                   className={`system-message ${
                     message.type === "error" ? "system-message-error" : ""
-                  }`}
+                  } ${message.type === "notification" ? "system-message-notification" : ""}`}
                 >
                   {message.content}
                 </div>

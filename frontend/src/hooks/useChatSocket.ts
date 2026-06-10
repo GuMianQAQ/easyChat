@@ -21,7 +21,6 @@ import {
 } from "./chatSocketHelpers";
 import { resolveWsUrl } from "../config/env";
 
-
 interface JoinSession {
   token: string;
   user: CurrentUser;
@@ -71,6 +70,8 @@ interface UseChatSocketResult {
   updateConversationMemberNickname: (conversationId: string, userId: string, nickname: string) => void;
   sendTextMessage: (options: SendMessageOptions) => boolean;
   sendImageMessage: (options: SendMessageOptions) => boolean;
+  sendFileMessage: (options: SendMessageOptions) => boolean;
+  sendMediaMessage: (messageType: "image" | "file", options: SendMessageOptions) => boolean;
   retryMessage: (messageId: string) => void;
   revokeMessage: (options: RevokeOptions) => void;
   removeLocalMessage: (messageId: string) => void;
@@ -403,15 +404,26 @@ export function useChatSocket(): UseChatSocketResult {
     [addSystemNotice, sendOptimistic],
   );
 
-  const sendImageMessage = useCallback(
-    (options: SendMessageOptions) => {
+  const sendMediaMessage = useCallback(
+    (messageType: "image" | "file", options: SendMessageOptions) => {
+      const mediaLabel = messageType === "image" ? "图片" : "文件";
       if (!options.content.trim()) {
-        addSystemNotice({ eventType: "image-empty", title: "发送", content: "图片不能为空", level: "error" });
+        addSystemNotice({ eventType: `${messageType}-empty`, title: "发送", content: `${mediaLabel}不能为空`, level: "error" });
         return false;
       }
-      return sendOptimistic("image", options);
+      return sendOptimistic(messageType, options);
     },
     [addSystemNotice, sendOptimistic],
+  );
+
+  const sendImageMessage = useCallback(
+    (options: SendMessageOptions) => sendMediaMessage("image", options),
+    [sendMediaMessage],
+  );
+
+  const sendFileMessage = useCallback(
+    (options: SendMessageOptions) => sendMediaMessage("file", options),
+    [sendMediaMessage],
   );
 
   const retryMessage = useCallback(
@@ -483,6 +495,8 @@ export function useChatSocket(): UseChatSocketResult {
     updateConversationMemberNickname,
     sendTextMessage,
     sendImageMessage,
+    sendFileMessage,
+    sendMediaMessage,
     retryMessage,
     revokeMessage,
     removeLocalMessage,

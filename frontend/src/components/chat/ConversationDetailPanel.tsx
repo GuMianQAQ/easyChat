@@ -6,10 +6,7 @@ import { resolveApiUrl } from "../../config/env";
 import { getToken } from "../../utils/auth";
 import Avatar from "../common/Avatar";
 import Switch from "../settings/Switch";
-import PinnedMessages from "./PinnedMessages";
-import GroupFileManager from "./GroupFileManager";
-import GroupAlbum from "./GroupAlbum";
-import GroupInviteLink from "./GroupInviteLink";
+import FriendPickerModal from "./FriendPickerModal";
 
 interface ConversationDetailPanelProps {
   token: string;
@@ -230,7 +227,6 @@ function ConversationDetailPanel({
   onUpdateGroupConversation,
   onUpdateGroupBotEnabled,
   onNotice,
-  onPreviewImage,
 }: ConversationDetailPanelProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -242,7 +238,7 @@ function ConversationDetailPanel({
   const [dangerError, setDangerError] = useState("");
   const [summaryContent, setSummaryContent] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"info" | "pinned" | "files" | "album" | "invite" | "permissions">("info");
+  const [showFriendPicker, setShowFriendPicker] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -380,59 +376,42 @@ function ConversationDetailPanel({
       <div className="conversation-detail-scroll">
         {isGroup ? (
           <>
-            <div className="detail-panel-tabs">
-              <button type="button" className={`detail-panel-tab ${activeTab === "info" ? "active" : ""}`} onClick={() => setActiveTab("info")}>资料</button>
-              <button type="button" className={`detail-panel-tab ${activeTab === "pinned" ? "active" : ""}`} onClick={() => setActiveTab("pinned")}>精华</button>
-              <button type="button" className={`detail-panel-tab ${activeTab === "files" ? "active" : ""}`} onClick={() => setActiveTab("files")}>文件</button>
-              <button type="button" className={`detail-panel-tab ${activeTab === "album" ? "active" : ""}`} onClick={() => setActiveTab("album")}>相册</button>
-              <button type="button" className={`detail-panel-tab ${activeTab === "invite" ? "active" : ""}`} onClick={() => setActiveTab("invite")}>邀请</button>
+            <div className="conversation-group-section">
+              <div className="conversation-group-section-head">
+                <strong>群成员</strong>
+                <span>{groupConversation?.memberCount || members.length} 人</span>
+              </div>
+              <div className="conversation-group-member-grid">
+                {visibleMembers.map((member) => (
+                  <div key={member.userId} className="conversation-group-member">
+                    <Avatar name={member.groupNickname || member.nickname} src={member.avatar} size="sm" />
+                    <span>{member.groupNickname || member.nickname}</span>
+                    {member.role === "admin" ? <span className="member-role-badge">管理员</span> : null}
+                    {member.mutedUntil ? <span className="member-muted-badge">禁言</span> : null}
+                  </div>
+                ))}
+                <button type="button" className="conversation-group-member conversation-group-member-add" onClick={() => setShowFriendPicker(true)}>
+                  <span className="conversation-group-member-add-icon">+</span>
+                </button>
+                {hasMoreMembers ? (
+                  <button type="button" className="conversation-group-member conversation-group-member-more" onClick={() => setShowAllMembers(true)}>
+                    <span>查看更多</span>
+                  </button>
+                ) : null}
+              </div>
             </div>
-
-            {activeTab === "info" ? (
-              <>
-                <div className="conversation-group-section">
-                  <div className="conversation-group-section-head">
-                    <strong>群成员</strong>
-                    <span>{groupConversation?.memberCount || members.length} 人</span>
-                  </div>
-                  <div className="conversation-group-member-grid">
-                    {visibleMembers.map((member) => (
-                      <div key={member.userId} className="conversation-group-member">
-                        <Avatar name={member.groupNickname || member.nickname} src={member.avatar} size="sm" />
-                        <span>{member.groupNickname || member.nickname}</span>
-                        {member.role === "admin" ? <span className="member-role-badge">管理员</span> : null}
-                        {member.mutedUntil ? <span className="member-muted-badge">禁言</span> : null}
-                      </div>
-                    ))}
-                    {hasMoreMembers ? (
-                      <button type="button" className="conversation-group-member conversation-group-member-more" onClick={() => setShowAllMembers(true)}>
-                        <span>查看更多</span>
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="conversation-group-section">
-                  <div className="conversation-group-section-head">
-                    <strong>群资料</strong>
-                    <span>{isGroupOwner ? "群主" : groupConversation?.myRole === "admin" ? "管理员" : "群成员"}</span>
-                  </div>
-                  <div className="conversation-group-profile-list">
-                    <EditableGroupField label="群名称" value={groupTitle} placeholder="未设置群名称" editable={canEditGroupProfile} onSave={(value) => saveGroupPatch({ name: value || groupTitle })} />
-                    <EditableGroupField label="群公告" value={groupAnnouncement} placeholder="暂无群公告" editable={canEditGroupProfile} multiline onSave={(value) => saveGroupPatch({ announcement: value })} />
-                    <EditableGroupField label="备注" value={groupConversation?.remark || ""} placeholder="群聊的备注仅自己可见" editable onSave={(value) => saveGroupPatch({ remark: value })} />
-                    <EditableGroupField label="我在本群的昵称" value={groupConversation?.myNickname || ""} placeholder="未设置群昵称" editable onSave={(value) => saveGroupPatch({ myNickname: value })} />
-                  </div>
-                </div>
-              </>
-            ) : activeTab === "pinned" ? (
-              <PinnedMessages token={token} conversationId={conversation.id} myRole={groupConversation?.myRole || "member"} onJumpToMessage={onJumpToMessage} onNotice={onNotice} />
-            ) : activeTab === "files" ? (
-              <GroupFileManager token={token} conversationId={conversation.id} onNotice={onNotice} />
-            ) : activeTab === "album" ? (
-              <GroupAlbum token={token} conversationId={conversation.id} onNotice={onNotice} onPreviewImage={onPreviewImage} />
-            ) : activeTab === "invite" ? (
-              <GroupInviteLink token={token} conversationId={conversation.id} onNotice={onNotice} />
-            ) : null}
+            <div className="conversation-group-section">
+              <div className="conversation-group-section-head">
+                <strong>群资料</strong>
+                <span>{isGroupOwner ? "群主" : groupConversation?.myRole === "admin" ? "管理员" : "群成员"}</span>
+              </div>
+              <div className="conversation-group-profile-list">
+                <EditableGroupField label="群名称" value={groupTitle} placeholder="未设置群名称" editable={canEditGroupProfile} onSave={(value) => saveGroupPatch({ name: value || groupTitle })} />
+                <EditableGroupField label="群公告" value={groupAnnouncement} placeholder="暂无群公告" editable={canEditGroupProfile} multiline onSave={(value) => saveGroupPatch({ announcement: value })} />
+                <EditableGroupField label="备注" value={groupConversation?.remark || ""} placeholder="群聊的备注仅自己可见" editable onSave={(value) => saveGroupPatch({ remark: value })} />
+                <EditableGroupField label="我在本群的昵称" value={groupConversation?.myNickname || ""} placeholder="未设置群昵称" editable onSave={(value) => saveGroupPatch({ myNickname: value })} />
+              </div>
+            </div>
           </>
         ) : null}
 
@@ -647,6 +626,23 @@ function ConversationDetailPanel({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {showFriendPicker && isGroup && groupConversation ? (
+        <FriendPickerModal
+          token={token}
+          conversationId={conversation.id}
+          conversationName={groupTitle}
+          currentMembers={members}
+          onNotice={onNotice}
+          onClose={() => setShowFriendPicker(false)}
+          onInvited={() => {
+            // Refresh group conversation to show new members
+            if (onUpdateGroupConversation) {
+              onUpdateGroupConversation(conversation.id, {});
+            }
+          }}
+        />
       ) : null}
     </aside>
   );

@@ -97,20 +97,16 @@ Authorization: Bearer <token>
 | 获取验证码 | GET | /api/captcha | 否 | 获取图片验证码 |
 | 用户注册 | POST | /api/auth/register | 否 | 注册新账号 |
 | 用户登录 | POST | /api/auth/login | 否 | 登录获取 token |
-| 获取当前用户 | GET | /api/auth/me | 是 | 获取当前登录用户信息 |
-| 修改密码 | PUT | /api/auth/me/password | 是 | 修改密码后需要重新登录 |
-| 修改资料 | PATCH | /api/auth/me | 是 | 修改当前用户资料 |
 
 ### 用户相关
 
 | 功能 | 方法 | 路径 | 是否登录 | 说明 |
 |------|------|------|----------|------|
-| 获取当前用户 | GET | /api/users/me | 是 | 获取当前用户信息 |
 | 获取用户资料 | GET | /api/users/me/profile | 是 | 获取当前用户详细资料 |
 | 修改用户资料 | PUT | /api/users/me/profile | 是 | 修改当前用户资料 |
-| 修改密码 | PUT | /api/users/me/password | 是 | 修改密码 |
+| 修改密码 | PUT | /api/users/me/password | 是 | 修改密码后需要重新登录 |
 | 搜索用户 | GET | /api/users/search?username=xxx | 是 | 通过账号精确搜索 |
-| 获取用户资料 | GET | /api/users/:id/profile | 是 | 获取指定用户资料 |
+| 获取指定用户资料 | GET | /api/users/:id/profile | 是 | 获取指定用户资料 |
 | 获取隐私设置 | GET | /api/users/me/privacy | 是 | 获取当前用户隐私设置 |
 | 修改隐私设置 | PUT | /api/users/me/privacy | 是 | 修改隐私设置 |
 
@@ -165,6 +161,7 @@ Authorization: Bearer <token>
 | 获取邀请链接 | GET | /api/conversations/:id/group/invites | 是 | 获取邀请链接列表 |
 | 删除邀请链接 | DELETE | /api/conversations/:id/group/invites/:inviteId | 是 | 删除邀请链接 |
 | 通过邀请加入 | POST | /api/conversations/group/join/:code | 是 | 通过邀请码加入群聊 |
+| 添加群成员 | POST | /api/conversations/:id/group/members | 是 | 邀请好友加入群聊 |
 | 群机器人开关 | PATCH | /api/groups/:id/bot | 是 | 开关群 AI 机器人 |
 
 ### 消息相关
@@ -173,7 +170,7 @@ Authorization: Bearer <token>
 |------|------|------|----------|------|
 | 获取消息历史 | GET | /api/messages | 是 | 获取会话消息列表 |
 | 获取目标消息附近记录 | GET | /api/messages/around | 是 | 获取指定消息附近的消息 |
-| 撤回消息 | POST | /api/messages/:id/revoke | 是 | 撤回自己发送的消息 |
+| 撤回消息 | POST | /api/messages/:messageId/revoke | 是 | 撤回自己发送的消息 |
 
 ### 文件相关
 
@@ -199,7 +196,7 @@ Authorization: Bearer <token>
 | 获取动态流 | GET | /api/moments/feed | 是 | 获取朋友圈动态 |
 | 发布动态 | POST | /api/moments | 是 | 发布新动态 |
 | 删除动态 | DELETE | /api/moments/:id | 是 | 删除自己的动态 |
-| 点赞 | POST | /api/moments/:id/like | is | 点赞动态 |
+| 点赞 | POST | /api/moments/:id/like | 是 | 点赞动态 |
 | 取消点赞 | DELETE | /api/moments/:id/like | 是 | 取消点赞 |
 | 评论 | POST | /api/moments/:id/comments | 是 | 评论动态 |
 | 删除评论 | DELETE | /api/moments/comments/:id | 是 | 删除评论 |
@@ -208,6 +205,7 @@ Authorization: Bearer <token>
 
 | 功能 | 方法 | 路径 | 是否登录 | 说明 |
 |------|------|------|----------|------|
+| 获取投票列表 | GET | /api/conversations/:id/votes | 是 | 获取会话中的投票列表 |
 | 创建投票 | POST | /api/conversations/:id/votes | 是 | 在会话中创建投票 |
 | 获取投票详情 | GET | /api/votes/:voteId | 是 | 获取投票详情 |
 | 投票 | POST | /api/votes/:voteId/vote | 是 | 参与投票 |
@@ -217,10 +215,27 @@ Authorization: Bearer <token>
 
 | 功能 | 方法 | 路径 | 是否登录 | 说明 |
 |------|------|------|----------|------|
+| 获取接龙列表 | GET | /api/conversations/:id/solitaires | 是 | 获取会话中的接龙列表 |
 | 创建接龙 | POST | /api/conversations/:id/solitaires | 是 | 在会话中创建接龙 |
 | 获取接龙详情 | GET | /api/solitaires/:solitaireId | 是 | 获取接龙详情 |
 | 参与接龙 | POST | /api/solitaires/:solitaireId/join | 是 | 参与接龙 |
 | 修改接龙条目 | PUT | /api/solitaires/:solitaireId/items/:itemId | 是 | 修改自己的接龙内容 |
+
+### 群相册
+
+| 功能 | 方法 | 路径 | 是否登录 | 说明 |
+|------|------|------|----------|------|
+| 创建相册 | POST | /api/conversations/:id/albums | 是 | 创建群相册 |
+| 获取相册列表 | GET | /api/conversations/:id/albums | 是 | 获取群内所有相册 |
+| 获取相册详情 | GET | /api/conversations/:id/albums/:albumId | 是 | 获取相册详细信息 |
+| 修改相册 | PUT | /api/conversations/:id/albums/:albumId | 是 | 修改相册名称等 |
+| 删除相册 | DELETE | /api/conversations/:id/albums/:albumId | 是 | 删除相册 |
+| 上传照片 | POST | /api/conversations/:id/albums/:albumId/photos | 是 | 向相册上传照片 |
+| 获取相册照片 | GET | /api/conversations/:id/albums/:albumId/photos | 是 | 获取相册内照片 |
+| 删除照片 | DELETE | /api/conversations/:id/albums/:albumId/photos/:photoId | 是 | 删除相册中的照片 |
+| 批量删除照片 | POST | /api/conversations/:id/albums/:albumId/photos/batch-delete | 是 | 批量删除相册照片 |
+| 获取会话全部相册照片 | GET | /api/conversations/:id/album-photos | 是 | 获取会话所有相册照片 |
+| 获取我的相册照片 | GET | /api/conversations/:id/album-photos/mine | 是 | 获取自己上传的相册照片 |
 
 ### AI 助手
 
@@ -411,9 +426,9 @@ curl -X POST 'http://127.0.0.1:8080/api/auth/login' \
 
 ---
 
-### 3.4 获取当前用户
+### 3.4 获取当前用户资料
 
-- **接口地址**：`GET /api/auth/me`
+- **接口地址**：`GET /api/users/me/profile`
 - **是否鉴权**：是
 
 ##### Headers
@@ -451,7 +466,7 @@ curl -X POST 'http://127.0.0.1:8080/api/auth/login' \
 ##### curl 示例
 
 ```bash
-curl -X GET 'http://127.0.0.1:8080/api/auth/me' \
+curl -X GET 'http://127.0.0.1:8080/api/users/me/profile' \
   -H 'Authorization: Bearer <token>'
 ```
 
@@ -459,7 +474,7 @@ curl -X GET 'http://127.0.0.1:8080/api/auth/me' \
 
 ### 3.5 修改密码
 
-- **接口地址**：`PUT /api/auth/me/password`
+- **接口地址**：`PUT /api/users/me/password`
 - **是否鉴权**：是
 - **使用场景**：用户修改密码，修改后需要重新登录
 
@@ -504,7 +519,7 @@ curl -X GET 'http://127.0.0.1:8080/api/auth/me' \
 ##### curl 示例
 
 ```bash
-curl -X PUT 'http://127.0.0.1:8080/api/auth/me/password' \
+curl -X PUT 'http://127.0.0.1:8080/api/users/me/password' \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -518,7 +533,7 @@ curl -X PUT 'http://127.0.0.1:8080/api/auth/me/password' \
 
 ### 3.6 修改用户资料
 
-- **接口地址**：`PATCH /api/auth/me`
+- **接口地址**：`PUT /api/users/me/profile`
 - **是否鉴权**：是
 
 ##### Headers
@@ -566,7 +581,7 @@ curl -X PUT 'http://127.0.0.1:8080/api/auth/me/password' \
 ##### curl 示例
 
 ```bash
-curl -X PATCH 'http://127.0.0.1:8080/api/auth/me' \
+curl -X PUT 'http://127.0.0.1:8080/api/users/me/profile' \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -2284,6 +2299,64 @@ curl -X POST 'http://127.0.0.1:8080/api/conversations/group/join/abc123' \
 
 ---
 
+### 8.16 添加群成员
+
+- **接口地址**：`POST /api/conversations/:conversationId/group/members`
+- **是否鉴权**：是
+- **使用场景**：邀请好友加入群聊
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+
+##### 入参
+
+```json
+{
+  "memberIds": ["u2", "u3"]
+}
+```
+
+| 字段 | 类型 | 必填 | 示例 | 中文名称 | 说明 | 注意点 |
+|------|------|------|------|----------|------|--------|
+| memberIds | array | 是 | ["u2", "u3"] | 成员 ID 列表 | 要邀请的用户 ID | 必须是好友 |
+
+##### 出参
+
+```json
+{
+  "ok": true
+}
+```
+
+##### 常见错误
+
+| 错误信息 | 原因 | 处理建议 |
+|----------|------|----------|
+| 只能邀请好友加入群聊 | memberIds 中有非好友 | 提示用户 |
+| 已经是群成员 | 目标用户已在群中 | 提示用户 |
+
+##### curl 示例
+
+```bash
+curl -X POST 'http://127.0.0.1:8080/api/conversations/group:xxx/group/members' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "memberIds": ["u2", "u3"]
+  }'
+```
+
+---
+
 ## 9. 消息接口
 
 ### 9.1 获取消息历史
@@ -3755,9 +3828,510 @@ curl -X PUT 'http://127.0.0.1:8080/api/solitaires/sol1/items/item1' \
 
 ---
 
-## 17. AI 助手接口
+## 17. 群相册接口
 
-### 17.1 SSE 流式对话
+### 17.1 创建相册
+
+- **接口地址**：`POST /api/conversations/:conversationId/albums`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+
+##### 入参
+
+```json
+{
+  "name": "毕业旅行"
+}
+```
+
+| 字段 | 类型 | 必填 | 示例 | 中文名称 | 说明 | 注意点 |
+|------|------|------|------|----------|------|--------|
+| name | string | 是 | 毕业旅行 | 相册名称 | 相册名称 | 不能为空 |
+
+##### 出参
+
+```json
+{
+  "album": {
+    "id": "album1",
+    "conversationId": "group:xxx",
+    "name": "毕业旅行",
+    "createdBy": "u1",
+    "creatorName": "顾眠",
+    "photoCount": 0,
+    "createdAt": "2026-05-19T12:00:00Z"
+  }
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X POST 'http://127.0.0.1:8080/api/conversations/group:xxx/albums' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "毕业旅行"
+  }'
+```
+
+---
+
+### 17.2 获取相册列表
+
+- **接口地址**：`GET /api/conversations/:conversationId/albums`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+
+##### 出参
+
+```json
+{
+  "albums": [
+    {
+      "id": "album1",
+      "conversationId": "group:xxx",
+      "name": "毕业旅行",
+      "createdBy": "u1",
+      "creatorName": "顾眠",
+      "photoCount": 5,
+      "coverUrl": "/uploads/albums/xxx.jpg",
+      "createdAt": "2026-05-19T12:00:00Z"
+    }
+  ]
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X GET 'http://127.0.0.1:8080/api/conversations/group:xxx/albums' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 17.3 获取相册详情
+
+- **接口地址**：`GET /api/conversations/:conversationId/albums/:albumId`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+
+##### 出参
+
+```json
+{
+  "album": {
+    "id": "album1",
+    "conversationId": "group:xxx",
+    "name": "毕业旅行",
+    "createdBy": "u1",
+    "creatorName": "顾眠",
+    "photoCount": 5,
+    "createdAt": "2026-05-19T12:00:00Z"
+  }
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X GET 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 17.4 修改相册
+
+- **接口地址**：`PUT /api/conversations/:conversationId/albums/:albumId`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+
+##### 入参
+
+```json
+{
+  "name": "新相册名称"
+}
+```
+
+| 字段 | 类型 | 必填 | 示例 | 中文名称 | 说明 | 注意点 |
+|------|------|------|------|----------|------|--------|
+| name | string | 是 | 新相册名称 | 相册名称 | 修改后的名称 | 不能为空 |
+
+##### 出参
+
+```json
+{
+  "ok": true
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X PUT 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "新相册名称"
+  }'
+```
+
+---
+
+### 17.5 删除相册
+
+- **接口地址**：`DELETE /api/conversations/:conversationId/albums/:albumId`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+
+##### 出参
+
+```json
+{
+  "ok": true
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X DELETE 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 17.6 上传照片
+
+- **接口地址**：`POST /api/conversations/:conversationId/albums/:albumId/photos`
+- **是否鉴权**：是
+- **Content-Type**：multipart/form-data
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+
+##### FormData
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| file | file | 是 | 图片文件 |
+
+##### 出参
+
+```json
+{
+  "photo": {
+    "id": "photo1",
+    "albumId": "album1",
+    "url": "/uploads/albums/xxx.jpg",
+    "uploadedBy": "u1",
+    "uploaderName": "顾眠",
+    "createdAt": "2026-05-19T12:00:00Z"
+  }
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X POST 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1/photos' \
+  -H 'Authorization: Bearer <token>' \
+  -F 'file=@/path/to/image.jpg'
+```
+
+---
+
+### 17.7 获取相册照片
+
+- **接口地址**：`GET /api/conversations/:conversationId/albums/:albumId/photos`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+
+##### 出参
+
+```json
+{
+  "photos": [
+    {
+      "id": "photo1",
+      "albumId": "album1",
+      "url": "/uploads/albums/xxx.jpg",
+      "uploadedBy": "u1",
+      "uploaderName": "顾眠",
+      "createdAt": "2026-05-19T12:00:00Z"
+    }
+  ]
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X GET 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1/photos' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 17.8 删除照片
+
+- **接口地址**：`DELETE /api/conversations/:conversationId/albums/:albumId/photos/:photoId`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+| photoId | 是 | photo1 | 照片 ID |
+
+##### 出参
+
+```json
+{
+  "ok": true
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X DELETE 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1/photos/photo1' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 17.9 批量删除照片
+
+- **接口地址**：`POST /api/conversations/:conversationId/albums/:albumId/photos/batch-delete`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+| albumId | 是 | album1 | 相册 ID |
+
+##### 入参
+
+```json
+{
+  "photoIds": ["photo1", "photo2"]
+}
+```
+
+| 字段 | 类型 | 必填 | 示例 | 中文名称 | 说明 | 注意点 |
+|------|------|------|------|----------|------|--------|
+| photoIds | array | 是 | ["photo1", "photo2"] | 照片 ID 列表 | 要删除的照片 ID | 不能为空 |
+
+##### 出参
+
+```json
+{
+  "ok": true
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X POST 'http://127.0.0.1:8080/api/conversations/group:xxx/albums/album1/photos/batch-delete' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "photoIds": ["photo1", "photo2"]
+  }'
+```
+
+---
+
+### 17.10 获取会话全部相册照片
+
+- **接口地址**：`GET /api/conversations/:conversationId/album-photos`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+
+##### 出参
+
+```json
+{
+  "photos": [
+    {
+      "id": "photo1",
+      "albumId": "album1",
+      "albumName": "毕业旅行",
+      "url": "/uploads/albums/xxx.jpg",
+      "uploadedBy": "u1",
+      "uploaderName": "顾眠",
+      "createdAt": "2026-05-19T12:00:00Z"
+    }
+  ]
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X GET 'http://127.0.0.1:8080/api/conversations/group:xxx/album-photos' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 17.11 获取我的相册照片
+
+- **接口地址**：`GET /api/conversations/:conversationId/album-photos/mine`
+- **是否鉴权**：是
+
+##### Headers
+
+| Header | 必填 | 示例 | 说明 |
+|--------|------|------|------|
+| Authorization | 是 | Bearer xxx | JWT token |
+
+##### 路径参数
+
+| 参数 | 必填 | 示例 | 说明 |
+|------|------|------|------|
+| conversationId | 是 | group:xxx | 群聊会话 ID |
+
+##### 出参
+
+```json
+{
+  "photos": [
+    {
+      "id": "photo1",
+      "albumId": "album1",
+      "albumName": "毕业旅行",
+      "url": "/uploads/albums/xxx.jpg",
+      "createdAt": "2026-05-19T12:00:00Z"
+    }
+  ]
+}
+```
+
+##### curl 示例
+
+```bash
+curl -X GET 'http://127.0.0.1:8080/api/conversations/group:xxx/album-photos/mine' \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+## 18. AI 助手接口
+
+### 18.1 SSE 流式对话
 
 - **接口地址**：`GET /api/ai/stream`
 - **是否鉴权**：是
@@ -3799,7 +4373,7 @@ curl -X GET 'http://127.0.0.1:8080/api/ai/stream?query=你好' \
 
 ---
 
-### 17.2 同步对话
+### 18.2 同步对话
 
 - **接口地址**：`POST /api/ai/chat`
 - **是否鉴权**：是
@@ -3852,7 +4426,7 @@ curl -X POST 'http://127.0.0.1:8080/api/ai/chat' \
 
 ---
 
-### 17.3 翻译
+### 18.3 翻译
 
 - **接口地址**：`POST /api/ai/translate`
 - **是否鉴权**：是
@@ -3899,7 +4473,7 @@ curl -X POST 'http://127.0.0.1:8080/api/ai/translate' \
 
 ---
 
-### 17.4 摘要
+### 18.4 摘要
 
 - **接口地址**：`POST /api/ai/summarize`
 - **是否鉴权**：是
@@ -3943,7 +4517,7 @@ curl -X POST 'http://127.0.0.1:8080/api/ai/summarize' \
 
 ---
 
-### 17.5 补全
+### 18.5 补全
 
 - **接口地址**：`POST /api/ai/complete`
 - **是否鉴权**：是
@@ -3990,7 +4564,7 @@ curl -X POST 'http://127.0.0.1:8080/api/ai/complete' \
 
 ---
 
-### 17.6 预测问题
+### 18.6 预测问题
 
 - **接口地址**：`POST /api/ai/predict-question`
 - **是否鉴权**：是
@@ -4035,7 +4609,7 @@ curl -X POST 'http://127.0.0.1:8080/api/ai/predict-question' \
 
 ---
 
-### 17.7 语义搜索
+### 18.7 语义搜索
 
 - **接口地址**：`GET /api/ai/search`
 - **是否鉴权**：是
@@ -4078,7 +4652,7 @@ curl -X GET 'http://127.0.0.1:8080/api/ai/search?q=搜索词&conversationId=priv
 
 ---
 
-### 17.8 使用统计
+### 18.8 使用统计
 
 - **接口地址**：`GET /api/ai/stats`
 - **是否鉴权**：是
@@ -4124,9 +4698,9 @@ curl -X GET 'http://127.0.0.1:8080/api/ai/stats' \
 
 ---
 
-## 18. 数据权限说明
+## 19. 数据权限说明
 
-### 18.1 私聊权限
+### 19.1 私聊权限
 
 私聊消息发送前必须校验：
 
@@ -4142,21 +4716,21 @@ curl -X GET 'http://127.0.0.1:8080/api/ai/stats' \
 - 不转发 WebSocket
 - 返回明确错误
 
-### 18.2 好友权限
+### 19.2 好友权限
 
 - 删除好友只删除 friendship 关系
 - 删除好友不删除历史消息
 - 拉黑只修改 friendship 状态
 - 拉黑不删除好友关系和历史消息
 
-### 18.3 清空聊天记录
+### 19.3 清空聊天记录
 
 - 清空聊天记录只影响当前用户
 - 不删除 messages
 - 不影响对方
 - 收藏记录不受影响
 
-### 18.4 群聊权限
+### 19.4 群聊权限
 
 - 只有群主可以解散群聊
 - 只有群主可以设置/撤销管理员
@@ -4167,7 +4741,7 @@ curl -X GET 'http://127.0.0.1:8080/api/ai/stats' \
 
 ---
 
-## 19. 后续维护说明
+## 20. 后续维护说明
 
 如果实际代码接口发生变化，需要同步更新：
 

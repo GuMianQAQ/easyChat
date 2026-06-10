@@ -1,20 +1,22 @@
 package chatstore
 
 import (
-	"errors"
 	"net/url"
 	"strings"
+
+	apperrors "easyChat/internal/errors"
 )
 
 // GroupFileItem represents a file or image shared in a group conversation.
 type GroupFileItem struct {
-	ID        string `json:"id"`
-	SenderID  string `json:"senderId"`
-	FileName  string `json:"fileName"`
-	FileURL   string `json:"fileUrl"`
-	FileSize  int64  `json:"fileSize"`
-	MimeType  string `json:"mimeType"`
-	CreatedAt string `json:"createdAt"`
+	ID         string `json:"id"`
+	SenderID   string `json:"senderId"`
+	SenderName string `json:"senderName"`
+	FileName   string `json:"fileName"`
+	FileURL    string `json:"fileUrl"`
+	FileSize   int64  `json:"fileSize"`
+	MimeType   string `json:"mimeType"`
+	CreatedAt  string `json:"createdAt"`
 }
 
 // GetGroupFiles returns files shared in a group conversation with optional type filter and keyword search.
@@ -25,13 +27,13 @@ func (s *Service) GetGroupFiles(userID, conversationID, fileType, keyword string
 		return nil, 0, err
 	}
 	if conversation.Type != GroupConversationType {
-		return nil, 0, errors.New("当前会话不是群聊")
+		return nil, 0, apperrors.ErrNotGroupConversation
 	}
 
 	if page < 1 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 50 {
+	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
 
@@ -71,12 +73,32 @@ func (s *Service) GetGroupFiles(userID, conversationID, fileType, keyword string
 	}
 
 	items := make([]GroupFileItem, 0, len(messages))
+
+	// Batch fetch uploaded file metadata to avoid N+1 queries
+	urls := make([]string, 0, len(messages))
+	for _, msg := range messages {
+		if msg.MessageType == "file" || msg.MessageType == "image" {
+			urls = append(urls, msg.Content)
+		}
+	}
+
+	uploadedMap := make(map[string]UploadedFile)
+	if len(urls) > 0 {
+		var uploadedFiles []UploadedFile
+		if err := s.db.Where("file_url IN ?", urls).Find(&uploadedFiles).Error; err == nil {
+			for _, f := range uploadedFiles {
+				uploadedMap[f.FileURL] = f
+			}
+		}
+	}
+
 	for _, msg := range messages {
 		item := GroupFileItem{
-			ID:        msg.ID,
-			SenderID:  msg.SenderID,
-			FileURL:   msg.Content,
-			CreatedAt: formatTime(msg.CreatedAt),
+			ID:         msg.ID,
+			SenderID:   msg.SenderID,
+			SenderName: msg.SenderName,
+			FileURL:    msg.Content,
+			CreatedAt:  formatTime(msg.CreatedAt),
 		}
 		// Extract filename from content URL
 		if parsedURL, err := url.Parse(msg.Content); err == nil {
@@ -90,9 +112,8 @@ func (s *Service) GetGroupFiles(userID, conversationID, fileType, keyword string
 				item.FileName = parts[len(parts)-1]
 			}
 		}
-		// Try to get file metadata from UploadedFile table
-		var uploaded UploadedFile
-		if err := s.db.Where("file_url = ?", msg.Content).First(&uploaded).Error; err == nil {
+		// Get file metadata from batch result
+		if uploaded, ok := uploadedMap[msg.Content]; ok {
 			item.FileName = uploaded.FileName
 			item.FileSize = uploaded.FileSize
 			item.MimeType = uploaded.MimeType

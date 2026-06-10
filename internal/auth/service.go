@@ -5,12 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	apperrors "easyChat/internal/errors"
 	"easyChat/internal/uid"
 
 	"golang.org/x/crypto/bcrypt"
@@ -135,17 +135,17 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 		return AuthResponse{}, err
 	}
 	if confirmPassword := strings.TrimSpace(req.ConfirmPassword); confirmPassword != "" && req.Password != confirmPassword {
-		return AuthResponse{}, errors.New(errPasswordsMismatch)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 	nickname, err := normalizeNickname(req.Nickname)
 	if err != nil {
 		return AuthResponse{}, err
 	}
 	if strings.TrimSpace(req.CaptchaID) == "" || strings.TrimSpace(req.CaptchaCode) == "" {
-		return AuthResponse{}, errors.New(errCaptchaRequired)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 	if !s.captchas.Verify(req.CaptchaID, req.CaptchaCode) {
-		return AuthResponse{}, errors.New(errCaptchaInvalid)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 
 	var count int64
@@ -153,7 +153,7 @@ func (s *Service) Register(req RegisterRequest) (AuthResponse, error) {
 		return AuthResponse{}, err
 	}
 	if count > 0 {
-		return AuthResponse{}, errors.New(errAccountExists)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -199,18 +199,18 @@ func (s *Service) SetAfterRegister(fn func(tx *gorm.DB, user User) error) {
 func (s *Service) Login(req LoginRequest) (AuthResponse, error) {
 	username := strings.TrimSpace(req.Username)
 	if username == "" {
-		return AuthResponse{}, errors.New(errUsernameRequired)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 	if req.Password == "" {
-		return AuthResponse{}, errors.New(errPasswordRequired)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 
 	var user User
 	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
-		return AuthResponse{}, errors.New(errCredentialsInvalid)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return AuthResponse{}, errors.New(errCredentialsInvalid)
+		return AuthResponse{}, apperrors.ErrBadRequest
 	}
 
 	return s.authResponse(user)
@@ -224,7 +224,7 @@ func (s *Service) UserFromToken(token string) (PublicUser, error) {
 
 	var user User
 	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
-		return PublicUser{}, errors.New(errAuthExpired)
+		return PublicUser{}, apperrors.ErrAuthExpired
 	}
 	return publicUser(user), nil
 }
@@ -237,7 +237,7 @@ func (s *Service) UpdateProfile(token string, req UpdateProfileRequest) (PublicU
 
 	var user User
 	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
-		return PublicUser{}, errors.New(errAuthExpired)
+		return PublicUser{}, apperrors.ErrAuthExpired
 	}
 
 	if req.Nickname != nil {
@@ -291,30 +291,30 @@ func (s *Service) ChangePassword(token string, req ChangePasswordRequest) error 
 	newPassword := strings.TrimSpace(req.NewPassword)
 	confirmPassword := strings.TrimSpace(req.ConfirmPassword)
 	if oldPassword == "" {
-		return errors.New(errOldPasswordRequired)
+		return apperrors.ErrBadRequest
 	}
 	if newPassword == "" {
-		return errors.New(errNewPasswordRequired)
+		return apperrors.ErrBadRequest
 	}
 	if confirmPassword == "" {
-		return errors.New(errConfirmPasswordMissing)
+		return apperrors.ErrBadRequest
 	}
 	if newPassword != confirmPassword {
-		return errors.New(errNewPasswordMismatch)
+		return apperrors.ErrBadRequest
 	}
 	if utf8.RuneCountInString(newPassword) < 6 || utf8.RuneCountInString(newPassword) > 32 {
-		return errors.New(errPasswordLengthRange)
+		return apperrors.ErrBadRequest
 	}
 	if oldPassword == newPassword {
-		return errors.New(errPasswordSameAsOld)
+		return apperrors.ErrBadRequest
 	}
 
 	var user User
 	if err := s.db.First(&user, "id = ?", claims.UserID).Error; err != nil {
-		return errors.New(errAuthExpired)
+		return apperrors.ErrAuthExpired
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
-		return errors.New(errOldPasswordInvalid)
+		return apperrors.ErrBadRequest
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
@@ -328,12 +328,119 @@ func (s *Service) ChangePassword(token string, req ChangePasswordRequest) error 
 	return nil
 }
 
+func (s *Service) UpdateProfileByID(userID string, req UpdateProfileRequest) (PublicUser, error) {
+	var user User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return PublicUser{}, apperrors.ErrAuthExpired
+	}
+
+	if req.Nickname != nil {
+		nickname, err := normalizeNickname(*req.Nickname)
+		if err != nil {
+			return PublicUser{}, err
+		}
+		user.Nickname = nickname
+	}
+	if req.Avatar != nil {
+		user.Avatar = strings.TrimSpace(*req.Avatar)
+	}
+	if req.Gender != nil {
+		gender, err := normalizeGender(*req.Gender)
+		if err != nil {
+			return PublicUser{}, err
+		}
+		user.Gender = gender
+	}
+	if req.Region != nil {
+		region, err := normalizeRegion(*req.Region)
+		if err != nil {
+			return PublicUser{}, err
+		}
+		user.Region = region
+	}
+	if req.Signature != nil {
+		signature, err := normalizeSignature(*req.Signature)
+		if err != nil {
+			return PublicUser{}, err
+		}
+		user.Signature = signature
+	}
+	if req.MomentCover != nil {
+		user.MomentCover = strings.TrimSpace(*req.MomentCover)
+	}
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return PublicUser{}, err
+	}
+	return publicUser(user), nil
+}
+
+func (s *Service) ChangePasswordByID(userID string, req ChangePasswordRequest) error {
+	oldPassword := strings.TrimSpace(req.OldPassword)
+	newPassword := strings.TrimSpace(req.NewPassword)
+	confirmPassword := strings.TrimSpace(req.ConfirmPassword)
+	if oldPassword == "" {
+		return apperrors.ErrBadRequest
+	}
+	if newPassword == "" {
+		return apperrors.ErrBadRequest
+	}
+	if confirmPassword == "" {
+		return apperrors.ErrBadRequest
+	}
+	if newPassword != confirmPassword {
+		return apperrors.ErrBadRequest
+	}
+	if utf8.RuneCountInString(newPassword) < 6 || utf8.RuneCountInString(newPassword) > 32 {
+		return apperrors.ErrBadRequest
+	}
+	if oldPassword == newPassword {
+		return apperrors.ErrBadRequest
+	}
+
+	var user User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return apperrors.ErrAuthExpired
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
+		return apperrors.ErrBadRequest
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user.PasswordHash = string(hash)
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) authResponse(user User) (AuthResponse, error) {
 	token, err := s.createToken(user.ID)
 	if err != nil {
 		return AuthResponse{}, err
 	}
-	return AuthResponse{Token: token, User: publicUser(user)}, nil
+	return AuthResponse{
+		Token: token,
+		User:  publicUser(user),
+	}, nil
+}
+
+// LookupUser 通过 ID 查询用户（公共函数，供其他包使用）
+func LookupUser(db *gorm.DB, userID string) (User, error) {
+	var user User
+	if err := db.First(&user, "id = ?", userID).Error; err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+// FormatTime 格式化时间（公共函数，供其他包使用）
+func FormatTime(value time.Time) string {
+	return value.Format("2006-01-02 15:04:05")
 }
 
 func publicUser(user User) PublicUser {
@@ -374,25 +481,25 @@ func (s *Service) createToken(userID string) (string, error) {
 func (s *Service) verifyToken(token string) (tokenClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return tokenClaims{}, errors.New(errAuthExpired)
+		return tokenClaims{}, apperrors.ErrAuthExpired
 	}
 
 	expected := sign(parts[0]+"."+parts[1], []byte(s.config.JWT.Secret))
 	if !hmac.Equal([]byte(expected), []byte(parts[2])) {
-		return tokenClaims{}, errors.New(errAuthExpired)
+		return tokenClaims{}, apperrors.ErrAuthExpired
 	}
 
 	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return tokenClaims{}, errors.New(errAuthExpired)
+		return tokenClaims{}, apperrors.ErrAuthExpired
 	}
 
 	var claims tokenClaims
 	if err := json.Unmarshal(raw, &claims); err != nil {
-		return tokenClaims{}, errors.New(errAuthExpired)
+		return tokenClaims{}, apperrors.ErrAuthExpired
 	}
 	if claims.UserID == "" || claims.Exp < time.Now().Unix() {
-		return tokenClaims{}, errors.New(errAuthExpired)
+		return tokenClaims{}, apperrors.ErrAuthExpired
 	}
 	return claims, nil
 }
@@ -406,20 +513,20 @@ func sign(value string, secret []byte) string {
 func normalizeUsername(username string) (string, error) {
 	trimmed := strings.TrimSpace(username)
 	if trimmed == "" {
-		return "", errors.New(errUsernameRequired)
+		return "", apperrors.ErrBadRequest
 	}
 	if !usernamePattern.MatchString(trimmed) {
-		return "", errors.New(errUsernameFormat)
+		return "", apperrors.ErrBadRequest
 	}
 	return trimmed, nil
 }
 
 func validatePassword(password string) error {
 	if password == "" {
-		return errors.New(errPasswordRequired)
+		return apperrors.ErrBadRequest
 	}
 	if utf8.RuneCountInString(password) < 6 {
-		return errors.New(errPasswordTooShort)
+		return apperrors.ErrBadRequest
 	}
 	return nil
 }
@@ -427,10 +534,10 @@ func validatePassword(password string) error {
 func normalizeNickname(nickname string) (string, error) {
 	trimmed := strings.TrimSpace(nickname)
 	if trimmed == "" {
-		return "", errors.New(errNicknameRequired)
+		return "", apperrors.ErrNicknameRequired
 	}
 	if count := utf8.RuneCountInString(trimmed); count < 1 || count > 20 {
-		return "", errors.New(errNicknameTooLong)
+		return "", apperrors.ErrNicknameTooLong
 	}
 	return trimmed, nil
 }
@@ -442,11 +549,16 @@ func normalizeGender(gender string) (string, error) {
 	case "male", "female":
 		return strings.TrimSpace(gender), nil
 	default:
-		return "", errors.New(errGenderInvalid)
+		return "", apperrors.ErrGenderInvalid
 	}
 }
 
 func safeGender(gender string) string {
+	return SafeGender(gender)
+}
+
+// SafeGender 安全地获取性别值（公共函数，供其他包使用）
+func SafeGender(gender string) string {
 	switch gender {
 	case "male", "female":
 		return gender
@@ -458,7 +570,7 @@ func safeGender(gender string) string {
 func normalizeRegion(region string) (string, error) {
 	trimmed := strings.TrimSpace(region)
 	if utf8.RuneCountInString(trimmed) > 40 {
-		return "", errors.New(errRegionTooLong)
+		return "", apperrors.ErrRegionTooLong
 	}
 	return trimmed, nil
 }
@@ -466,7 +578,7 @@ func normalizeRegion(region string) (string, error) {
 func normalizeSignature(signature string) (string, error) {
 	trimmed := strings.TrimSpace(signature)
 	if utf8.RuneCountInString(trimmed) > 100 {
-		return "", errors.New(errSignatureTooLong)
+		return "", apperrors.ErrSignatureTooLong
 	}
 	return trimmed, nil
 }

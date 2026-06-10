@@ -1,4 +1,5 @@
 import type { MouseEventHandler } from "react";
+import { resolveMediaUrl } from "../../config/env";
 
 interface AvatarProps {
   name: string;
@@ -30,7 +31,8 @@ function initials(name: string): string {
 }
 
 function Avatar({ name, src = "", size = "md", tone = "default", onClick, title }: AvatarProps) {
-  const content = <>{src ? <img className="avatar-image" src={src} alt="" /> : initials(name)}</>;
+  const resolvedSrc = src ? resolveMediaUrl(src) : "";
+  const content = <>{resolvedSrc ? <img className="avatar-image" src={resolvedSrc} alt="" /> : initials(name)}</>;
 
   if (onClick) {
     return (

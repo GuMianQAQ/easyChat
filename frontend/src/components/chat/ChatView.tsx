@@ -49,10 +49,12 @@ interface ChatMainProps {
   completionScope?: "all" | "ai" | "normal";
   questionPrediction?: boolean;
   questionPredictionScope?: "all" | "ai" | "normal";
+  hideWindowOnCapture: boolean;
   onDraftChange: (value: string) => void;
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
-  onCaptureScreen: (quote?: MessageQuote | null) => Promise<boolean>;
+  onSendFile: (file: File, quote?: MessageQuote | null) => Promise<boolean>;
+  onCaptureScreen: (hideWindow: boolean) => Promise<string | null>;
   onLoadMore: () => void;
   onRetry: (messageId: string) => void;
   onRevoke: (message: ChatMessage) => void;
@@ -135,9 +137,11 @@ function ChatMain({
   completionScope,
   questionPrediction,
   questionPredictionScope,
+  hideWindowOnCapture,
   onDraftChange,
   onSendText,
   onSendImage,
+  onSendFile,
   onCaptureScreen,
   onLoadMore,
   onRetry,
@@ -356,11 +360,13 @@ function ChatMain({
           completionScope={completionScope}
           questionPrediction={questionPrediction}
           questionPredictionScope={questionPredictionScope}
+          hideWindowOnCapture={hideWindowOnCapture}
           token={token}
           onClearQuote={() => setQuote(null)}
           onContentChange={onDraftChange}
           onSendText={onSendText}
           onSendImage={onSendImage}
+          onSendFile={onSendFile}
           onCaptureScreen={onCaptureScreen}
           onNotice={onNotice}
         />
@@ -389,7 +395,7 @@ function ChatMain({
         />
       </div>
 
-      <ImagePreviewModal open={Boolean(previewImage)} src={previewImage} onClose={() => setPreviewImage("")} />
+      <ImagePreviewModal open={Boolean(previewImage)} images={previewImage ? [previewImage] : []} currentIndex={0} onClose={() => setPreviewImage("")} />
       {dragging ? <div className="drag-overlay">释放发送图片</div> : null}
 
       {activeFeature === "pinned" && activeConversation.type === "group" && (
@@ -404,7 +410,7 @@ function ChatMain({
       )}
       {activeFeature === "album" && activeConversation.type === "group" && (
         <GroupFeatureModal title={`群相册 - ${activeConversation.title}`} onClose={() => setActiveFeature(null)}>
-          <GroupAlbum token={token} conversationId={activeConversation.id} onNotice={onNotice} onPreviewImage={(url) => setPreviewImage(url)} />
+          <GroupAlbum token={token} conversationId={activeConversation.id} onNotice={onNotice} />
         </GroupFeatureModal>
       )}
       {activeFeature === "vote" && activeConversation.type === "group" && (

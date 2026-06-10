@@ -137,6 +137,7 @@ function App() {
     updateConversationMemberNickname,
     sendTextMessage,
     sendImageMessage,
+    sendFileMessage,
     retryMessage,
     revokeMessage,
     removeLocalMessage,
@@ -295,7 +296,7 @@ function App() {
     }
     processedMessageRef.current = latestMessage.id;
 
-    if (latestMessage.type !== "chat" && latestMessage.type !== "system") {
+    if (latestMessage.type !== "chat" && latestMessage.type !== "system" && latestMessage.type !== "notification") {
       return;
     }
 
@@ -766,6 +767,7 @@ function App() {
     handleCreateGroupConversation,
     handleSendText,
     handleSendImage,
+    handleSendFile,
     handleCaptureScreen,
     handleUpdateConversationSettings,
     handleUpdateGroupConversation: updateGroupConversationRemote,
@@ -815,6 +817,7 @@ function App() {
     prependConversationMessages,
     sendTextMessage,
     sendImageMessage,
+    sendFileMessage,
     addSystemNotice,
   });
 
@@ -963,6 +966,7 @@ function App() {
           },
           onSendText: handleSendText,
           onSendImage: handleSendImage,
+          onSendFile: handleSendFile,
           onCaptureScreen: handleCaptureScreen,
           onDraftChange: (value) => setDraft(activeConversationId, value),
           onLoadMore: () => {

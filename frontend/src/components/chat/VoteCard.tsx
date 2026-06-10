@@ -6,7 +6,6 @@ import { castVote } from "../../utils/chatApi";
 interface VoteCardProps {
   token: string;
   vote: VoteType;
-  myRole: "owner" | "admin" | "member";
   onNotice: (title: string, content: string, level?: "info" | "success" | "warning" | "error") => void;
   onRefresh?: () => void;
 }
