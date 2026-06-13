@@ -71,6 +71,9 @@ interface UseChatSocketResult {
   sendTextMessage: (options: SendMessageOptions) => boolean;
   sendImageMessage: (options: SendMessageOptions) => boolean;
   sendFileMessage: (options: SendMessageOptions) => boolean;
+  sendVoiceMessage: (options: SendMessageOptions) => boolean;
+  sendContactMessage: (options: SendMessageOptions) => boolean;
+  sendMarkdownMessage: (options: SendMessageOptions) => boolean;
   sendMediaMessage: (messageType: "image" | "file", options: SendMessageOptions) => boolean;
   retryMessage: (messageId: string) => void;
   revokeMessage: (options: RevokeOptions) => void;
@@ -239,7 +242,19 @@ export function useChatSocket(): UseChatSocketResult {
           return;
         }
 
-        if (!["chat", "system", "error", "revoke", "ai-stream-chunk", "ai-stream-done"].includes(parsed.type)) {
+        if (!["chat", "system", "error", "revoke", "ai-stream-chunk", "ai-stream-done", "transcript-update"].includes(parsed.type)) {
+          return;
+        }
+
+        if (parsed.type === "transcript-update") {
+          const { messageId, transcript } = parsed as unknown as { messageId: string; transcript: string };
+          if (messageId && transcript) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === messageId ? { ...msg, transcript } : msg
+              )
+            );
+          }
           return;
         }
 
@@ -426,6 +441,39 @@ export function useChatSocket(): UseChatSocketResult {
     [sendMediaMessage],
   );
 
+  const sendVoiceMessage = useCallback(
+    (options: SendMessageOptions) => {
+      if (!options.content.trim()) {
+        addSystemNotice({ eventType: "voice-empty", title: "发送", content: "语音不能为空", level: "error" });
+        return false;
+      }
+      return sendOptimistic("voice", options);
+    },
+    [addSystemNotice, sendOptimistic],
+  );
+
+  const sendContactMessage = useCallback(
+    (options: SendMessageOptions) => {
+      if (!options.content.trim()) {
+        addSystemNotice({ eventType: "contact-empty", title: "发送", content: "名片不能为空", level: "error" });
+        return false;
+      }
+      return sendOptimistic("text", options);
+    },
+    [addSystemNotice, sendOptimistic],
+  );
+
+  const sendMarkdownMessage = useCallback(
+    (options: SendMessageOptions) => {
+      if (!options.content.trim()) {
+        addSystemNotice({ eventType: "markdown-empty", title: "发送", content: "内容不能为空", level: "error" });
+        return false;
+      }
+      return sendOptimistic("text", options);
+    },
+    [addSystemNotice, sendOptimistic],
+  );
+
   const retryMessage = useCallback(
     (messageId: string) => {
       const message = messages.find((item) => item.id === messageId);
@@ -496,6 +544,9 @@ export function useChatSocket(): UseChatSocketResult {
     sendTextMessage,
     sendImageMessage,
     sendFileMessage,
+    sendVoiceMessage,
+    sendContactMessage,
+    sendMarkdownMessage,
     sendMediaMessage,
     retryMessage,
     revokeMessage,

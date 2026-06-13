@@ -38,7 +38,7 @@ export function normalizeQuote(quote?: MessageQuote | null): MessageQuote | null
     return null;
   }
 
-  const messageType = quote.messageType === "image" ? "image" : quote.messageType === "file" ? "file" : "text";
+  const messageType = quote.messageType === "image" ? "image" : quote.messageType === "file" ? "file" : quote.messageType === "voice" ? "voice" : "text";
 
   return {
     id: safeText(quote.id),
@@ -76,7 +76,9 @@ export function mapIncomingMessage(message: ServerMessage, currentUserId: string
         ? "image"
         : message.messageType === "file"
           ? "file"
-          : "text",
+          : message.messageType === "voice"
+            ? "voice"
+            : "text",
     senderId,
     senderName: safeText(message.senderName),
     targetUserId: safeText(message.targetUserId),
@@ -89,6 +91,8 @@ export function mapIncomingMessage(message: ServerMessage, currentUserId: string
     quote: normalizeQuote(message.quote),
     status: message.type === "chat" ? "sent" : undefined,
     revoked,
+    duration: (message as any).duration,
+    transcript: (message as any).transcript,
   };
 }
 

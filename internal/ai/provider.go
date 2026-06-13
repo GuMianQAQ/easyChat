@@ -34,4 +34,5 @@ type Provider interface {
 	Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	Stream(ctx context.Context, req ChatRequest) (io.Reader, error)
 	Embed(ctx context.Context, text string) ([]float64, error)
+	Transcribe(ctx context.Context, audioPath, language string) (string, error)
 }

@@ -87,6 +87,11 @@ declare global {
     myChatAttentionPreview?: MyChatAttentionPreview;
     myChatMoments?: MyChatMoments;
     myChatCapture?: MyChatCapture;
+    myChatEditor?: {
+      onScreenshotData: (callback: (dataUrl: string) => void) => () => void;
+      confirmEdit: (dataUrl: string) => Promise<void>;
+      cancelEdit: () => Promise<void>;
+    };
   }
 }
 

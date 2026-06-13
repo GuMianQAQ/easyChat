@@ -126,6 +126,9 @@ func fileKind(fileName, mimeType string) string {
 	if strings.HasSuffix(lowerName, ".doc") || strings.HasSuffix(lowerName, ".docx") || strings.HasSuffix(lowerName, ".xls") || strings.HasSuffix(lowerName, ".xlsx") || strings.HasSuffix(lowerName, ".pdf") || strings.HasSuffix(lowerName, ".txt") || strings.HasSuffix(lowerName, ".md") {
 		return "document"
 	}
+	if strings.HasPrefix(lowerType, "audio/") || strings.HasSuffix(lowerName, ".webm") || strings.HasSuffix(lowerName, ".ogg") || strings.HasSuffix(lowerName, ".mp3") || strings.HasSuffix(lowerName, ".wav") || strings.HasSuffix(lowerName, ".m4a") {
+		return "audio"
+	}
 	return "other"
 }
 

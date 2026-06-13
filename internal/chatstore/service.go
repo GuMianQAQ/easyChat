@@ -53,6 +53,8 @@ type Message struct {
 	Content        string    `gorm:"type:text;not null"`
 	QuoteID        *string   `gorm:"index"`
 	Revoked        bool      `gorm:"default:false"`
+	Duration       int       `gorm:"default:0"`
+	Transcript     string    `gorm:"type:text"`
 	CreatedAt      time.Time `gorm:"index"`
 }
 
@@ -172,6 +174,23 @@ type AlbumPhoto struct {
 	CreatedAt  time.Time
 }
 
+type FavoriteSticker struct {
+	ID        string    `gorm:"primaryKey"`
+	UserID    string    `gorm:"index;size:64;not null"`
+	ImageURL  string    `gorm:"type:text;not null"`
+	CreatedAt time.Time
+}
+
+type LinkPreview struct {
+	URL         string    `gorm:"primaryKey;size:2048"`
+	Title       string    `gorm:"size:256"`
+	Description string    `gorm:"type:text"`
+	Image       string    `gorm:"type:text"`
+	Favicon     string    `gorm:"type:text"`
+	CreatedAt   time.Time
+	ExpiresAt   time.Time `gorm:"index"`
+}
+
 type FilePayload struct {
 	ID               string `json:"id"`
 	UserID           string `json:"userId"`
@@ -207,6 +226,8 @@ type MessagePayload struct {
 	Avatar         string        `json:"avatar"`
 	Quote          *QuotePayload `json:"quote,omitempty"`
 	Revoked        bool          `json:"revoked,omitempty"`
+	Duration       int           `json:"duration,omitempty"`
+	Transcript     string        `json:"transcript,omitempty"`
 }
 
 type ConversationSummary struct {
@@ -300,6 +321,7 @@ type PersistMessageInput struct {
 	MessageType    string
 	Content        string
 	Quote          *QuotePayload
+	Duration       int
 }
 
 type RevokeResult struct {
@@ -323,4 +345,8 @@ func NewService(db *gorm.DB, uploadsDir string, cfg Config) (*Service, error) {
 		return nil, err
 	}
 	return service, nil
+}
+
+func (s *Service) DB() *gorm.DB {
+	return s.db
 }

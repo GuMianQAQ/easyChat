@@ -34,6 +34,7 @@ import {
   updateGroupConversation,
   uploadImage,
   uploadFile,
+  uploadVoice,
 } from "../utils/chatApi";
 import {
   DEFAULT_AUTH_DRAFT,
@@ -105,6 +106,30 @@ interface CreateConversationActionsOptions {
     content: string;
     quote?: MessageQuote | null;
   }) => boolean;
+  sendVoiceMessage: (options: {
+    conversationId: string;
+    messageScope: "private" | "group";
+    targetUserId?: string;
+    targetName?: string;
+    content: string;
+    quote?: MessageQuote | null;
+  }) => boolean;
+  sendContactMessage: (options: {
+    conversationId: string;
+    messageScope: "private" | "group";
+    targetUserId?: string;
+    targetName?: string;
+    content: string;
+    quote?: MessageQuote | null;
+  }) => boolean;
+  sendMarkdownMessage: (options: {
+    conversationId: string;
+    messageScope: "private" | "group";
+    targetUserId?: string;
+    targetName?: string;
+    content: string;
+    quote?: MessageQuote | null;
+  }) => boolean;
   addSystemNotice: (options: {
     eventType: string;
     title: string;
@@ -128,6 +153,9 @@ export function createConversationActions({
   sendTextMessage,
   sendImageMessage,
   sendFileMessage,
+  sendVoiceMessage,
+  sendContactMessage,
+  sendMarkdownMessage,
   addSystemNotice,
 }: CreateConversationActionsOptions) {
   const { activeConversationId, conversations, visibleActiveConversation, historyState } = chatState;
@@ -445,6 +473,40 @@ export function createConversationActions({
     }
   };
 
+  const handleSendVoice = async (audioBlob: Blob, duration: number, quote?: MessageQuote | null) => {
+    if (!storedToken) {
+      handleAuthExpired();
+      return false;
+    }
+
+    try {
+      const file = new File([audioBlob], `voice-${Date.now()}.webm`, { type: audioBlob.type || "audio/webm" });
+      const result = await uploadVoice(storedToken, file, duration);
+      return sendVoiceMessage(buildSendOptions(JSON.stringify({ url: result.url, duration: result.duration }), quote));
+    } catch (error) {
+      if (handleAuthError(error)) {
+        return false;
+      }
+      addSystemNotice({
+        eventType: "upload-voice-failed",
+        title: "语音",
+        content: error instanceof Error ? error.message : "语音发送失败",
+        level: "error",
+      });
+      return false;
+    }
+  };
+
+  const handleSendContact = (contactInfo: { userId: string; name: string; avatar: string; wechatId?: string }, quote?: MessageQuote | null) => {
+    const displayId = contactInfo.wechatId || contactInfo.userId;
+    const content = `[名片] ${contactInfo.name}\nID: ${contactInfo.userId}\n微信: ${displayId}`;
+    return sendContactMessage(buildSendOptions(content, quote));
+  };
+
+  const handleSendMarkdown = (content: string, quote?: MessageQuote | null) => {
+    return sendMarkdownMessage(buildSendOptions(`[MD]\n${content}`, quote));
+  };
+
   const handleUpdateConversationSettings = async (
     conversationId: string,
     patch: { isPinned?: boolean; isMuted?: boolean },
@@ -740,6 +802,9 @@ export function createConversationActions({
     handleSendImage,
     handleSendFile,
     handleCaptureScreen,
+    handleSendVoice,
+    handleSendContact,
+    handleSendMarkdown,
     handleUpdateConversationSettings,
     handleClearConversation,
     handleDeleteConversation,

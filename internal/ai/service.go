@@ -461,3 +461,23 @@ func cosineSimilarity(a, b []float64) float64 {
 	}
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
 }
+
+func (s *Service) Transcribe(audioPath string) (string, error) {
+	if !s.config.Enable.Transcribe {
+		return "", fmt.Errorf("语音转写功能已关闭")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.Timeout.Chat)*time.Second)
+	defer cancel()
+
+	transcript, err := s.provider.Transcribe(ctx, audioPath, "zh")
+	if err != nil {
+		return "", fmt.Errorf("语音转写失败: %v", err)
+	}
+
+	return strings.TrimSpace(transcript), nil
+}
+
+func (s *Service) IsTranscribeEnabled() bool {
+	return s.config.Enable.Transcribe
+}

@@ -1,12 +1,17 @@
-import { File, Image, Scissors, Smile, X } from "lucide-react";
+import { Mic, Scissors, Smile, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { CompletionGranularity, GroupMemberItem, MessageQuote, PredictionScope } from "../../types/chat";
+import type { CompletionGranularity, ContactItem, GroupMemberItem, MessageQuote, PredictionScope } from "../../types/chat";
 import { prepareImageDataUrl } from "../../utils/media";
 import { useInputCompletion } from "../../hooks/useInputCompletion";
 import { useQuestionPrediction } from "../../hooks/useQuestionPrediction";
-import EmojiPicker from "./EmojiPicker";
+import { useVoiceRecorder } from "../../hooks/useVoiceRecorder";
+import ContactPicker from "./ContactPicker";
+import EmojiPanel from "./EmojiPanel";
+import MarkdownEditor from "./MarkdownEditor";
+import MediaMenu from "./MediaMenu";
 import MentionPicker from "./MentionPicker";
 import QuotePreview from "./QuotePreview";
+import VoiceRecorder from "./VoiceRecorder";
 
 interface MessageComposerProps {
   activeConversationId: string;
@@ -32,8 +37,15 @@ interface MessageComposerProps {
   onSendText: (content: string, quote?: MessageQuote | null) => boolean;
   onSendImage: (dataUrl: string, quote?: MessageQuote | null) => Promise<boolean>;
   onSendFile: (file: File, quote?: MessageQuote | null) => Promise<boolean>;
+  onSendVoice: (audioBlob: Blob, duration: number, quote?: MessageQuote | null) => Promise<boolean>;
+  onSendContact: (contactInfo: { userId: string; name: string; avatar: string; wechatId?: string }, quote?: MessageQuote | null) => boolean;
+  onSendMarkdown: (content: string, quote?: MessageQuote | null) => boolean;
   onCaptureScreen: (hideWindow: boolean) => Promise<string | null>;
   onNotice: (title: string, content: string, level?: "info" | "success" | "warning" | "error") => void;
+  favoriteStickers?: import("../../utils/chatApi").FavoriteSticker[];
+  onStickerUpload?: (file: File) => Promise<void>;
+  onStickerDelete?: (stickerId: string) => Promise<void>;
+  contacts?: ContactItem[];
 }
 
 function MessageComposer({
@@ -60,8 +72,15 @@ function MessageComposer({
   onSendText,
   onSendImage,
   onSendFile,
+  onSendVoice,
+  onSendContact,
+  onSendMarkdown,
   onCaptureScreen,
   onNotice,
+  favoriteStickers,
+  onStickerUpload,
+  onStickerDelete,
+  contacts,
 }: MessageComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [mentionKeyword, setMentionKeyword] = useState<string | null>(null);
@@ -71,6 +90,14 @@ function MessageComposer({
   const selectionRef = useRef({ start: 0, end: 0 });
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [markdownEditorOpen, setMarkdownEditorOpen] = useState(false);
+  const voiceRecorder = useVoiceRecorder();
+  const recordingPromiseRef = useRef<Promise<{ blob: Blob; duration: number }> | null>(null);
+  const startXRef = useRef(0);
+  const cancelZoneRef = useRef(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isCancelZone, setIsCancelZone] = useState(false);
 
   const { completion, dismissCompletion } = useInputCompletion({
     content,
@@ -162,6 +189,52 @@ function MessageComposer({
       }
     } catch (error) {
       onNotice("文件", error instanceof Error ? error.message : "文件发送失败", "error");
+    }
+  };
+
+  const handlePointerDown = async (e: React.PointerEvent) => {
+    if (voiceRecorder.state !== "idle") return;
+    startXRef.current = e.clientX;
+    cancelZoneRef.current = false;
+    setIsCancelZone(false);
+    setIsRecording(true);
+
+    // Capture pointer to track movement outside the button
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
+    recordingPromiseRef.current = voiceRecorder.start();
+
+    try {
+      const { blob, duration } = await recordingPromiseRef.current;
+      if (!cancelZoneRef.current && blob.size > 0) {
+        await onSendVoice(blob, duration, quote);
+        onClearQuote();
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message !== "录音时间太短" && error.message !== "cancelled") {
+        onNotice("语音", error.message, "error");
+      }
+    } finally {
+      setIsRecording(false);
+      setIsCancelZone(false);
+      cancelZoneRef.current = false;
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (voiceRecorder.state !== "recording") return;
+    const dx = startXRef.current - e.clientX;
+    const cancelZone = dx > 80;
+    cancelZoneRef.current = cancelZone;
+    setIsCancelZone(cancelZone);
+  };
+
+  const handlePointerUp = () => {
+    if (voiceRecorder.state !== "recording") return;
+    if (cancelZoneRef.current) {
+      voiceRecorder.cancel();
+    } else {
+      voiceRecorder.stop();
     }
   };
 
@@ -263,35 +336,45 @@ function MessageComposer({
         >
           <Smile size={18} />
         </button>
+        <MediaMenu
+          disabled={disabled}
+          onFileSelect={() => fileInputRef.current?.click()}
+          onContactSelect={() => setContactPickerOpen(true)}
+          onMarkdownSelect={() => setMarkdownEditorOpen(true)}
+        />
         <button
           type="button"
-          title="图片"
+          title="按住录音，松手发送，左滑取消"
           disabled={disabled}
-          onClick={() => imageInputRef.current?.click()}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          style={{ touchAction: "none" }}
         >
-          <Image size={18} />
-        </button>
-        <button
-          type="button"
-          title="文件"
-          disabled={disabled}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <File size={18} />
+          <Mic size={18} />
         </button>
         <button
           type="button"
           title="截图"
           onClick={async () => {
             const dataUrl = await onCaptureScreen(hideWindowOnCapture);
-            if (dataUrl) {
-              setScreenshotPreview(dataUrl);
-            }
+            if (dataUrl) setScreenshotPreview(dataUrl);
           }}
         >
           <Scissors size={18} />
         </button>
       </div>
+
+      {isRecording ? (
+        <VoiceRecorder
+          analyserNode={voiceRecorder.analyserNode}
+          duration={voiceRecorder.duration}
+          isCancelZone={isCancelZone}
+          onCancel={() => { cancelZoneRef.current = true; voiceRecorder.cancel(); }}
+          onSend={() => voiceRecorder.stop()}
+        />
+      ) : null}
 
       <div className="composer-input-wrap">
         {isGroupChat && mentionKeyword !== null && groupMembers.length > 0 ? (
@@ -389,12 +472,16 @@ function MessageComposer({
         ) : null}
         {emojiOpen ? (
           <div className="composer-emoji-popover">
-            <EmojiPicker
-              onPick={(emoji, event) => {
-                event.preventDefault();
-                event.stopPropagation();
+            <EmojiPanel
+              onEmojiPick={(emoji) => {
                 insertEmoji(emoji);
               }}
+              onStickerSend={(_sticker) => {
+                onNotice("表情", "收藏表情发送功能待实现", "info");
+              }}
+              favoriteStickers={favoriteStickers}
+              onStickerUpload={onStickerUpload}
+              onStickerDelete={onStickerDelete}
             />
           </div>
         ) : null}
@@ -424,6 +511,24 @@ function MessageComposer({
           发送
         </button>
       </div>
+
+      <ContactPicker
+        isOpen={contactPickerOpen}
+        contacts={(contacts || []).map((c) => ({ userId: c.id, name: c.name, avatar: c.avatar, wechatId: c.username || c.id }))}
+        onSelect={(contact) => {
+          onSendContact(contact, quote);
+          onClearQuote();
+        }}
+        onClose={() => setContactPickerOpen(false)}
+      />
+      <MarkdownEditor
+        isOpen={markdownEditorOpen}
+        onSend={(mdContent) => {
+          onSendMarkdown(mdContent, quote);
+          onClearQuote();
+        }}
+        onClose={() => setMarkdownEditorOpen(false)}
+      />
     </div>
   );
 }

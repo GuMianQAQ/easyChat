@@ -1,5 +1,5 @@
-export type MessageType = "chat" | "system" | "notification" | "error" | "revoke" | "ai-stream-chunk" | "ai-stream-done";
-export type ChatMessageType = "text" | "image" | "file";
+export type MessageType = "chat" | "system" | "notification" | "error" | "revoke" | "ai-stream-chunk" | "ai-stream-done" | "transcript-update";
+export type ChatMessageType = "text" | "image" | "file" | "voice" | "contact" | "markdown";
 export type MessageStatus = "sending" | "sent" | "failed";
 export type MessageScope = "private" | "group" | "system";
 
@@ -43,6 +43,8 @@ export interface ServerMessage {
   avatar: string;
   quote?: MessageQuote | null;
   revoked?: boolean;
+  duration?: number;
+  transcript?: string;
 }
 
 export interface ClientChatPayload {
@@ -86,6 +88,8 @@ export interface ChatMessage {
   quote?: MessageQuote | null;
   status?: MessageStatus;
   revoked?: boolean;
+  duration?: number;
+  transcript?: string;
 }
 
 export interface Conversation {
@@ -480,4 +484,11 @@ export interface GroupMemberPayload {
   role: "owner" | "admin" | "member";
   groupNickname: string;
   mutedUntil?: string | null;
+}
+
+export interface ContactContent {
+  userId: string;
+  name: string;
+  avatar: string;
+  wechatId: string;
 }

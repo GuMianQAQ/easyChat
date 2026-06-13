@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Send, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { createVote } from "../../utils/chatApi";
 import type { Vote } from "../../types/chat";
 
@@ -200,7 +200,6 @@ export default function VoteCreateForm({
           onClick={handleSubmit}
           disabled={submitting}
         >
-          <Send size={14} />
           {submitting ? "创建中..." : "发送投票"}
         </button>
       </div>

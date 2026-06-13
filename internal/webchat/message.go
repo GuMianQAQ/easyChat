@@ -18,7 +18,8 @@ const (
 	MessageTypeError        = "error"
 	MessageTypeRevoke       = "revoke"
 	MessageTypeAIStreamChunk = "ai-stream-chunk"
-	MessageTypeAIStreamDone  = "ai-stream-done"
+	MessageTypeAIStreamDone       = "ai-stream-done"
+	MessageTypeTranscriptUpdate   = "transcript-update"
 
 	ScopePrivate = "private"
 	ScopeGroup   = "group"
@@ -27,6 +28,7 @@ const (
 	ChatMessageText  = "text"
 	ChatMessageImage = "image"
 	ChatMessageFile  = "file"
+	ChatMessageVoice = "voice"
 
 	MaxAvatarBytes = 256 * 1024
 )
@@ -59,6 +61,8 @@ type Message struct {
 	Avatar         string `json:"avatar"`
 	Quote          *Quote `json:"quote,omitempty"`
 	Revoked        bool   `json:"revoked,omitempty"`
+	Duration       int    `json:"duration,omitempty"`
+	Transcript     string `json:"transcript,omitempty"`
 }
 
 type ClientInput struct {
@@ -132,7 +136,7 @@ func normalizeQuote(quote *Quote) *Quote {
 	}
 
 	messageType := strings.TrimSpace(quote.MessageType)
-	if messageType != ChatMessageImage && messageType != ChatMessageFile {
+	if messageType != ChatMessageImage && messageType != ChatMessageFile && messageType != ChatMessageVoice {
 		messageType = ChatMessageText
 	}
 
@@ -184,6 +188,22 @@ func NewAIStreamDone(streamID, conversationID, messageID string) AIStreamDone {
 		StreamID:       streamID,
 		ConversationID: conversationID,
 		MessageID:      messageID,
+	}
+}
+
+type TranscriptUpdate struct {
+	Type           string `json:"type"`
+	MessageID      string `json:"messageId"`
+	ConversationID string `json:"conversationId"`
+	Transcript     string `json:"transcript"`
+}
+
+func NewTranscriptUpdate(messageID, conversationID, transcript string) TranscriptUpdate {
+	return TranscriptUpdate{
+		Type:           MessageTypeTranscriptUpdate,
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		Transcript:     transcript,
 	}
 }
 
@@ -265,6 +285,21 @@ func ValidateInput(input ClientInput) (*ValidatedInput, error) {
 			Content:        content,
 			Quote:          normalizeQuote(input.Quote),
 		}, nil
+	case ChatMessageVoice:
+		content, err := validateVoiceURL(strings.TrimSpace(input.Content))
+		if err != nil {
+			return nil, err
+		}
+		return &ValidatedInput{
+			ID:             id,
+			ConversationID: conversationID,
+			MessageScope:   messageScope,
+			MessageType:    ChatMessageVoice,
+			TargetUserID:   targetUserID,
+			TargetName:     targetName,
+			Content:        content,
+			Quote:          normalizeQuote(input.Quote),
+		}, nil
 	default:
 		return nil, fmt.Errorf("不支持的消息类型")
 	}
@@ -287,6 +322,19 @@ func validateImageURL(value string) (string, error) {
 
 func validateFileURL(value string) (string, error) {
 	return validateMediaURL(value, "文件")
+}
+
+func validateVoiceURL(value string) (string, error) {
+	// Handle JSON format: {"url":"/uploads/voice/xxx.webm","duration":15}
+	if strings.HasPrefix(value, "{") {
+		var data struct {
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal([]byte(value), &data); err == nil && data.URL != "" {
+			return validateMediaURL(data.URL, "语音")
+		}
+	}
+	return validateMediaURL(value, "语音")
 }
 
 func validateMediaURL(value, mediaType string) (string, error) {

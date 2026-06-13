@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"easyChat/internal/auth"
+	"easyChat/internal/chatstore"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,6 +25,7 @@ func (s *Server) registerAIRoutes(api *gin.RouterGroup) {
 	ai.POST("/predict-question", s.handleAIPredictQuestion)
 	ai.GET("/search", s.handleAISearch)
 	ai.GET("/stats", s.handleAIStats)
+	ai.POST("/transcribe", s.handleAITranscribe)
 }
 
 func (s *Server) handleAIStream(c *gin.Context) {
@@ -196,6 +199,56 @@ func (s *Server) handleAIStats(c *gin.Context) {
 	_ = c.MustGet("user").(auth.PublicUser)
 
 	c.JSON(http.StatusOK, s.AI.GetStats().Snapshot())
+}
+
+func (s *Server) handleAITranscribe(c *gin.Context) {
+	_ = c.MustGet("user").(auth.PublicUser)
+
+	var req struct {
+		MessageID string `json:"messageId"`
+		AudioURL  string `json:"audioUrl"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errRequestFormat})
+		return
+	}
+
+	if !s.AI.IsTranscribeEnabled() {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "语音转写功能未启用"})
+		return
+	}
+
+	// Check if transcript already cached
+	var message chatstore.Message
+	if err := s.Store.DB().Where("id = ?", req.MessageID).First(&message).Error; err == nil && message.Transcript != "" {
+		c.JSON(http.StatusOK, gin.H{"transcript": message.Transcript})
+		return
+	}
+
+	// Resolve audio file path
+	relPath := strings.TrimPrefix(req.AudioURL, "/")
+	audioPath := filepath.Join(s.uploadsDir, strings.TrimPrefix(relPath, "uploads/"))
+
+	transcript, err := s.AI.Transcribe(audioPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Cache transcript in DB
+	if req.MessageID != "" {
+		s.Store.DB().Model(&chatstore.Message{}).Where("id = ?", req.MessageID).Update("transcript", transcript)
+	}
+
+	// Get conversation members for broadcast
+	if message.ConversationID != "" {
+		memberIDs, _ := s.Store.GetConversationMemberIDs(message.ConversationID)
+		if len(memberIDs) > 0 {
+			s.Hub.BroadcastTranscriptUpdate(req.MessageID, message.ConversationID, transcript, memberIDs)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"transcript": transcript})
 }
 
 func writeSSEJSON(w http.ResponseWriter, event string, payload any) error {

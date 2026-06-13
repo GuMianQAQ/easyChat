@@ -198,6 +198,19 @@ func (s *Service) ConversationMemberIDs(userID, conversationID string) ([]string
 	}
 }
 
+// GetConversationMemberIDs 返回指定会话的所有成员 ID，不需要当前用户权限校验。
+func (s *Service) GetConversationMemberIDs(conversationID string) ([]string, error) {
+	var members []ConversationMember
+	if err := s.db.Where("conversation_id = ?", conversationID).Find(&members).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(members))
+	for _, m := range members {
+		ids = append(ids, m.UserID)
+	}
+	return ids, nil
+}
+
 func (s *Service) LeaveGroupConversation(userID, conversationID string) error {
 	conversation, err := s.getConversationForUser(userID, conversationID)
 	if err != nil {

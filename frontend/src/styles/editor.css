@@ -1,0 +1,154 @@
+.editor-root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+.editor-loading {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e1e1e;
+  color: #888;
+  font-size: 14px;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  flex-shrink: 0;
+}
+
+.editor-toolbar-tools {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-toolbar-tools button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background: #3d3d3d;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.editor-toolbar-tools button:hover {
+  background: #4d4d4d;
+}
+
+.editor-toolbar-tools button.active {
+  background: #7cb342;
+  color: #fff;
+}
+
+.editor-toolbar-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-brush-sizes {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-brush-sizes button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: #3d3d3d;
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.editor-brush-sizes button:hover {
+  background: #4d4d4d;
+}
+
+.editor-brush-sizes button.active {
+  background: #7cb342;
+  color: #fff;
+}
+
+.editor-colors {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-colors button {
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.editor-colors button:hover {
+  border-color: #888;
+}
+
+.editor-colors button.active {
+  border-color: #fff;
+}
+
+.editor-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.editor-toolbar-actions button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  background: #3d3d3d;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.editor-toolbar-actions button:hover {
+  background: #4d4d4d;
+}
+
+.editor-toolbar-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.editor-toolbar-actions .editor-confirm {
+  background: #7cb342;
+  color: #fff;
+}
+
+.editor-toolbar-actions .editor-confirm:hover {
+  background: #689f38;
+}
+
+.editor-canvas-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.editor-canvas-area canvas {
+  border: 1px solid #3d3d3d;
+}

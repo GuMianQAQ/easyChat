@@ -265,12 +265,11 @@ export async function uploadFile(
 ): Promise<UploadedFileItem> {
   const formData = new FormData();
   formData.append("file", file, filename);
-  const response = await requestJSON<{ file: UploadedFileItem }>("/api/upload/file", {
+  return await requestJSON<UploadedFileItem>("/api/upload/file", {
     method: "POST",
     headers: authHeaders(token),
     body: formData,
   });
-  return response.file;
 }
 
 export async function fetchFiles(
@@ -601,5 +600,74 @@ export async function getAllAlbumPhotos(token: string, conversationId: string, p
 export async function getMyAlbumPhotos(token: string, conversationId: string, page = 1, pageSize = 20): Promise<{ photos: AlbumPhoto[]; total: number }> {
   return requestJSON(`/api/conversations/${conversationId}/album-photos/mine?page=${page}&pageSize=${pageSize}`, {
     headers: authHeaders(token),
+  });
+}
+
+// Favorite sticker API functions
+
+export interface FavoriteSticker {
+  id: string;
+  imageUrl: string;
+  createdAt: string;
+}
+
+export async function fetchFavoriteStickers(token: string): Promise<FavoriteSticker[]> {
+  const response = await requestJSON<{ stickers: FavoriteSticker[] }>(
+    "/api/favorite-stickers",
+    { headers: authHeaders(token) }
+  );
+  return response.stickers;
+}
+
+export async function uploadFavoriteSticker(token: string, file: File): Promise<FavoriteSticker> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await requestJSON<{ sticker: FavoriteSticker }>(
+    "/api/favorite-stickers",
+    {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+    }
+  );
+  return response.sticker;
+}
+
+export async function deleteFavoriteSticker(token: string, stickerId: string): Promise<void> {
+  await requestJSON<{ ok: boolean }>(`/api/favorite-stickers/${encodeURIComponent(stickerId)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function uploadVoice(
+  token: string,
+  file: File,
+  duration: number,
+): Promise<{ url: string; duration: number }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("duration", String(duration));
+  const response = await fetch(resolveApiUrl("/api/upload/voice"), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || "语音上传失败");
+  }
+  return response.json();
+}
+
+export async function transcribeVoice(
+  token: string,
+  messageId: string,
+  audioUrl: string,
+): Promise<{ transcript: string }> {
+  return requestJSON("/api/ai/transcribe", {
+    method: "POST",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ messageId, audioUrl }),
   });
 }

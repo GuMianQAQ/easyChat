@@ -88,6 +88,8 @@ func payloadToWire(message chatstore.MessagePayload) Message {
 		Avatar:         message.Avatar,
 		Quote:          payloadQuoteToWire(message.Quote),
 		Revoked:        message.Revoked,
+		Duration:       message.Duration,
+		Transcript:     message.Transcript,
 	}
 	if message.Type == MessageTypeRevoke {
 		wire.MessageID = message.ID
@@ -199,14 +201,27 @@ func (c *Client) readPump() {
 				}
 			}
 
-			message, err := c.store.SaveMessage(currentUser, chatstore.PersistMessageInput{
-				ID:             validated.ID,
-				ConversationID: validated.ConversationID,
-				MessageScope:   validated.MessageScope,
-				MessageType:    validated.MessageType,
-				Content:        validated.Content,
-				Quote:          payloadQuoteToStore(validated.Quote),
-			})
+		// Extract duration from voice message content
+		var voiceDuration int
+		if validated.MessageType == ChatMessageVoice {
+			var voiceData struct {
+				URL      string `json:"url"`
+				Duration int    `json:"duration"`
+			}
+			if json.Unmarshal([]byte(input.Content), &voiceData) == nil {
+				voiceDuration = voiceData.Duration
+			}
+		}
+
+		message, err := c.store.SaveMessage(currentUser, chatstore.PersistMessageInput{
+			ID:             validated.ID,
+			ConversationID: validated.ConversationID,
+			MessageScope:   validated.MessageScope,
+			MessageType:    validated.MessageType,
+			Content:        validated.Content,
+			Quote:          payloadQuoteToStore(validated.Quote),
+			Duration:       voiceDuration,
+		})
 			if err != nil {
 				c.sendError(err.Error())
 				continue

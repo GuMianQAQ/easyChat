@@ -2,7 +2,9 @@ package chatstore
 
 import (
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -86,6 +88,7 @@ func (s *Service) SaveMessage(user auth.PublicUser, input PersistMessageInput) (
 		MessageType:    input.MessageType,
 		Content:        input.Content,
 		QuoteID:        quoteID,
+		Duration:       input.Duration,
 		CreatedAt:      now,
 	}
 	if err := s.db.Create(&record).Error; err != nil {
@@ -164,8 +167,19 @@ func (s *Service) RevokeMessage(user auth.PublicUser, messageID, conversationID 
 	if time.Since(record.CreatedAt) > 2*time.Minute {
 		return RevokeResult{}, apperrors.ErrRevokeTimeExpired
 	}
-	if err := s.db.Model(&record).Update("revoked", true).Error; err != nil {
-		return RevokeResult{}, err
+	if record.MessageType == "voice" {
+		// Voice messages: hard delete + remove audio file
+		if err := s.db.Delete(&record).Error; err != nil {
+			return RevokeResult{}, err
+		}
+		// Try to remove the audio file from disk
+		audioPath := strings.TrimPrefix(record.Content, "/uploads/")
+		fullPath := filepath.Join(s.uploadsDir, audioPath)
+		os.Remove(fullPath) // ignore error
+	} else {
+		if err := s.db.Model(&record).Update("revoked", true).Error; err != nil {
+			return RevokeResult{}, err
+		}
 	}
 
 	now := time.Now()
@@ -359,6 +373,8 @@ func (s *Service) toPayload(currentUserID string, record Message, conversation C
 		Avatar:         record.SenderAvatar,
 		Quote:          quote,
 		Revoked:        record.Revoked,
+		Duration:       record.Duration,
+		Transcript:     record.Transcript,
 	}
 
 	if conversation.Type == "private" {
@@ -389,6 +405,12 @@ func summarizeMessageRecord(record Message, isSelf bool) string {
 			return "[文件]"
 		}
 		return fmt.Sprintf("[文件] %s", fileName)
+	}
+	if record.MessageType == "voice" {
+		if record.Duration > 0 {
+			return fmt.Sprintf("[语音] %d:%02d", record.Duration/60, record.Duration%60)
+		}
+		return "[语音]"
 	}
 	return record.Content
 }

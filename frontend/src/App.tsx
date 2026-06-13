@@ -29,6 +29,10 @@ import {
   fetchGroupConversation,
   fetchFavorites,
   uploadImage,
+  fetchFavoriteStickers,
+  uploadFavoriteSticker,
+  deleteFavoriteSticker,
+  type FavoriteSticker,
 } from "./utils/chatApi";
 import { fetchCurrentUser } from "./utils/auth";
 import {
@@ -82,6 +86,7 @@ function App() {
     DEFAULT_SETTINGS,
   );
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
+  const [favoriteStickers, setFavoriteStickers] = useState<FavoriteSticker[]>([]);
   const [storedContacts, setStoredContacts] = useLocalStorage<ContactItem[]>(
     "easychat:contacts",
     [],
@@ -138,6 +143,9 @@ function App() {
     sendTextMessage,
     sendImageMessage,
     sendFileMessage,
+    sendVoiceMessage,
+    sendContactMessage,
+    sendMarkdownMessage,
     retryMessage,
     revokeMessage,
     removeLocalMessage,
@@ -219,6 +227,7 @@ function App() {
         await refreshPrivacy(storedToken);
         await refreshConversations(storedToken);
         await refreshFavorites(storedToken);
+        fetchFavoriteStickers(storedToken).then(setFavoriteStickers).catch(() => {});
         join({ token: storedToken, user });
       } catch {
         if (cancelled) {
@@ -769,6 +778,9 @@ function App() {
     handleSendImage,
     handleSendFile,
     handleCaptureScreen,
+    handleSendVoice,
+    handleSendContact,
+    handleSendMarkdown,
     handleUpdateConversationSettings,
     handleUpdateGroupConversation: updateGroupConversationRemote,
     handleUpdateGroupBotEnabled: updateGroupBotEnabledRemote,
@@ -818,6 +830,9 @@ function App() {
     sendTextMessage,
     sendImageMessage,
     sendFileMessage,
+    sendVoiceMessage,
+    sendContactMessage,
+    sendMarkdownMessage,
     addSystemNotice,
   });
 
@@ -938,6 +953,7 @@ function App() {
           streamingContent: streamingState?.conversationId === activeConversationId ? streamingState.content : undefined,
           streamingLoading: streamingState?.conversationId === activeConversationId ? streamingState.loading : undefined,
           currentUserId,
+          favoriteStickers,
         }}
         chatActions={{
           onConversationChange: openConversation,
@@ -1017,6 +1033,19 @@ function App() {
             handleDismissGroupConversation(conversation),
           onUpdateGroupConversation: handleUpdateGroupConversation,
           onUpdateGroupBotEnabled: handleUpdateGroupBotEnabled,
+          onStickerUpload: async (file: File) => {
+            if (!storedToken) return;
+            const sticker = await uploadFavoriteSticker(storedToken, file);
+            setFavoriteStickers((prev) => [sticker, ...prev.filter((s) => s.id !== sticker.id)]);
+          },
+          onStickerDelete: async (stickerId: string) => {
+            if (!storedToken) return;
+            await deleteFavoriteSticker(storedToken, stickerId);
+            setFavoriteStickers((prev) => prev.filter((s) => s.id !== stickerId));
+          },
+          onSendVoice: handleSendVoice,
+          onSendContact: handleSendContact,
+          onSendMarkdown: handleSendMarkdown,
         }}
         contactItems={contactItems}
         starredContacts={starredContacts}

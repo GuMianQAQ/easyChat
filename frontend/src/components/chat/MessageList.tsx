@@ -37,6 +37,7 @@ interface MessageListProps {
   onRevoke: (message: ChatMessage) => void;
   onRetry: (messageId: string) => void;
   onTranslate?: (message: ChatMessage) => void;
+  onTranscribeVoice?: (message: ChatMessage) => void;
   onPinMessage?: (message: ChatMessage) => void;
   streamingContent?: string;
   streamingLoading?: boolean;
@@ -88,6 +89,7 @@ function MessageList({
   onRevoke,
   onRetry,
   onTranslate,
+  onTranscribeVoice,
   onPinMessage,
   streamingContent,
   streamingLoading,
@@ -215,6 +217,18 @@ function MessageList({
           setContextMenu(null);
         },
       });
+    } else if (!message.revoked && message.messageType === "voice") {
+      if (!message.transcript && onTranscribeVoice) {
+        actions.push({
+          key: "transcribe",
+          label: "转写",
+          icon: <Languages size={14} />,
+          onClick: () => {
+            onTranscribeVoice(message);
+            setContextMenu(null);
+          },
+        });
+      }
     }
 
     if (!message.revoked) {

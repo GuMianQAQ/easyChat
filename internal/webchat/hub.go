@@ -1,12 +1,13 @@
 package webchat
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 )
 
 type dispatchRequest struct {
-	message     Message
+	message     any
 	targetUsers []string
 }
 
@@ -64,6 +65,11 @@ func (h *Hub) BroadcastPrivate(message Message, userIDs ...string) {
 	h.dispatch <- dispatchRequest{message: message, targetUsers: userIDs}
 }
 
+func (h *Hub) BroadcastTranscriptUpdate(messageID, conversationID, transcript string, memberUserIDs []string) {
+	msg := NewTranscriptUpdate(messageID, conversationID, transcript)
+	h.dispatch <- dispatchRequest{message: msg, targetUsers: memberUserIDs}
+}
+
 func (h *Hub) Register(client *Client) {
 	h.register <- client
 }
@@ -72,7 +78,7 @@ func (h *Hub) Unregister(client *Client) {
 	h.unregister <- client
 }
 
-func (h *Hub) publishAll(message Message) {
+func (h *Hub) publishAll(message any) {
 	h.mu.RLock()
 	clients := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
@@ -80,7 +86,7 @@ func (h *Hub) publishAll(message Message) {
 	}
 	h.mu.RUnlock()
 
-	payload, err := MarshalMessage(message)
+	payload, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("failed to marshal websocket message: %v", err)
 		return
@@ -91,7 +97,7 @@ func (h *Hub) publishAll(message Message) {
 	}
 }
 
-func (h *Hub) publishUsers(message Message, userIDs []string) {
+func (h *Hub) publishUsers(message any, userIDs []string) {
 	h.mu.RLock()
 	targets := make([]*Client, 0)
 	seenUsers := make(map[string]bool)
@@ -111,7 +117,7 @@ func (h *Hub) publishUsers(message Message, userIDs []string) {
 	}
 	h.mu.RUnlock()
 
-	payload, err := MarshalMessage(message)
+	payload, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("failed to marshal websocket message: %v", err)
 		return

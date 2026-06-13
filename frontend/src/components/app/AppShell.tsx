@@ -66,6 +66,7 @@ interface ChatShellState {
   streamingContent?: string;
   streamingLoading?: boolean;
   currentUserId: string;
+  favoriteStickers?: import("../../utils/chatApi").FavoriteSticker[];
 }
 
 interface ChatShellActions {
@@ -109,6 +110,11 @@ interface ChatShellActions {
     },
   ) => Promise<GroupConversationPayload | null>;
   onUpdateGroupBotEnabled: (conversationId: string, botEnabled: boolean) => Promise<GroupConversationPayload | null>;
+  onStickerUpload?: (file: File) => Promise<void>;
+  onStickerDelete?: (stickerId: string) => Promise<void>;
+  onSendVoice: (audioBlob: Blob, duration: number, quote?: MessageQuote | null) => Promise<boolean>;
+  onSendContact: (contactInfo: { userId: string; name: string; avatar: string; wechatId?: string }, quote?: MessageQuote | null) => boolean;
+  onSendMarkdown: (content: string, quote?: MessageQuote | null) => boolean;
 }
 
 interface AppShellProps {
@@ -390,6 +396,13 @@ export default function AppShell({
                 onUploadImage={chatActions.onUploadImage}
                 onUpdateGroupConversation={chatActions.onUpdateGroupConversation}
                 onUpdateGroupBotEnabled={chatActions.onUpdateGroupBotEnabled}
+                favoriteStickers={chatState.favoriteStickers}
+                onStickerUpload={chatActions.onStickerUpload}
+                onStickerDelete={chatActions.onStickerDelete}
+                onSendVoice={chatActions.onSendVoice}
+                onSendContact={chatActions.onSendContact}
+                onSendMarkdown={chatActions.onSendMarkdown}
+                contacts={contactItems}
               />
             ) : activeDock === "contacts" ? (
               <ContactsView.Detail

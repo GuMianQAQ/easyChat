@@ -112,11 +112,13 @@ func (s *Server) registerAPIRoutes(router *gin.Engine) {
 	s.registerMessageRoutes(protected)
 	s.registerFavoriteRoutes(protected)
 	s.registerFileRoutes(protected)
+	s.registerStickerRoutes(protected)
 	s.registerFriendRoutes(protected)
 	s.registerMomentRoutes(protected)
 	s.registerAIRoutes(protected)
 	s.registerVoteRoutes(protected)
 	s.registerSolitaireRoutes(protected)
+	s.registerVideoRoutes(protected)
 }
 
 func (s *Server) corsMiddleware() gin.HandlerFunc {

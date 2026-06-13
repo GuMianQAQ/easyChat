@@ -1675,7 +1675,7 @@
 }
 
 .vote-submit-btn {
-  background: var(--accent-primary);
+  background: var(--matcha);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1684,7 +1684,6 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
 }
 
 .vote-submit-btn:disabled {
@@ -2381,7 +2380,6 @@
 .solitaire-submit-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   padding: 8px 20px;
   background: var(--matcha);
   color: #fff;

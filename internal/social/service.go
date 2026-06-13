@@ -176,8 +176,10 @@ func (s *Service) SearchUser(requesterID, username string) (*UserSearchResult, e
 		return nil, apperrors.ErrInputCompleteAccount
 	}
 
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(username)
+	like := "%" + escaped + "%"
 	var user auth.User
-	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
+	if err := s.db.Where("username LIKE ? OR nickname LIKE ?", like, like).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}

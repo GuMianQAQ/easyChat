@@ -86,6 +86,13 @@ interface ChatMainProps {
     },
   ) => Promise<GroupConversationPayload | null>;
   onUpdateGroupBotEnabled: (conversationId: string, botEnabled: boolean) => Promise<GroupConversationPayload | null>;
+  favoriteStickers?: import("../../utils/chatApi").FavoriteSticker[];
+  onStickerUpload?: (file: File) => Promise<void>;
+  onStickerDelete?: (stickerId: string) => Promise<void>;
+  onSendVoice: (audioBlob: Blob, duration: number, quote?: MessageQuote | null) => Promise<boolean>;
+  onSendContact: (contactInfo: { userId: string; name: string; avatar: string; wechatId?: string }, quote?: MessageQuote | null) => boolean;
+  onSendMarkdown: (content: string, quote?: MessageQuote | null) => boolean;
+  contacts?: import("../../types/chat").ContactItem[];
 }
 
 function NotificationPanel({ notifications }: { notifications: NotificationItem[] }) {
@@ -161,6 +168,13 @@ function ChatMain({
   onUploadImage,
   onUpdateGroupConversation,
   onUpdateGroupBotEnabled,
+  favoriteStickers,
+  onStickerUpload,
+  onStickerDelete,
+  onSendVoice,
+  onSendContact,
+  onSendMarkdown,
+  contacts,
 }: ChatMainProps) {
   const [previewImage, setPreviewImage] = useState("");
   const [quote, setQuote] = useState<MessageQuote | null>(null);
@@ -191,6 +205,16 @@ function ChatMain({
       }
     } catch {
       setTranslation({ text: message.content, result: "翻译请求失败" });
+    }
+  };
+
+  const handleTranscribeVoice = async (message: ChatMessage) => {
+    try {
+      const { transcribeVoice } = await import("../../utils/chatApi");
+      const result = await transcribeVoice(token, message.id, message.content);
+      console.debug("[ChatView] 语音转写成功:", result.transcript);
+    } catch (error) {
+      onNotice("语音转写", error instanceof Error ? error.message : "转写失败", "error");
     }
   };
 
@@ -321,6 +345,7 @@ function ChatMain({
           onRetry={onRetry}
           onTranslate={handleTranslate}
           isGroupChat={activeConversation.type === "group"}
+          onTranscribeVoice={handleTranscribeVoice}
           onPinMessage={activeConversation.type === "group" ? async (message) => {
             try {
               const { pinMessage } = await import("../../utils/chatApi");
@@ -369,6 +394,13 @@ function ChatMain({
           onSendFile={onSendFile}
           onCaptureScreen={onCaptureScreen}
           onNotice={onNotice}
+          favoriteStickers={favoriteStickers}
+          onStickerUpload={onStickerUpload}
+          onStickerDelete={onStickerDelete}
+          onSendVoice={onSendVoice}
+          onSendContact={onSendContact}
+          onSendMarkdown={onSendMarkdown}
+          contacts={contacts}
         />
       </div>
 

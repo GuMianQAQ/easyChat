@@ -39,12 +39,19 @@ type PredictConfig struct {
 	MaxTokens int `mapstructure:"max_tokens"`
 }
 
+// TranscribeConfig 语音转写配置。
+type TranscribeConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Model   string `mapstructure:"model"`
+}
+
 // EnableConfig 功能开关配置。
 type EnableConfig struct {
-	Chat   bool `mapstructure:"chat"`
-	Stream bool `mapstructure:"stream"`
-	Tools  bool `mapstructure:"tools"`
-	Search bool `mapstructure:"search"`
+	Chat       bool `mapstructure:"chat"`
+	Stream     bool `mapstructure:"stream"`
+	Tools      bool `mapstructure:"tools"`
+	Search     bool `mapstructure:"search"`
+	Transcribe bool `mapstructure:"transcribe"`
 }
 
 // Config AI 模块配置。
@@ -61,6 +68,7 @@ type Config struct {
 	Summarize     SummarizeConfig `mapstructure:"summarize"`
 	Complete      CompleteConfig  `mapstructure:"complete"`
 	Predict       PredictConfig   `mapstructure:"predict"`
+	Transcribe    TranscribeConfig `mapstructure:"transcribe"`
 	Enable        EnableConfig    `mapstructure:"enable"`
 
 	// 系统提示词

@@ -1,10 +1,14 @@
 import type { MouseEvent, ReactNode } from "react";
 import { File, RefreshCw } from "lucide-react";
 import type { ChatMessage, GroupMemberItem } from "../../types/chat";
+import type { ContactContent } from "../../types/chat";
 import { formatTimeLabel } from "../../utils/time";
 import { segmentsForDisplay } from "../../utils/mentions";
 import { resolveMediaUrl } from "../../config/env";
 import Avatar from "../common/Avatar";
+import VoicePlayer from "./VoicePlayer";
+import ContactCard from "./ContactCard";
+import MarkdownContent from "./MarkdownContent";
 
 function summarizeQuote(message: ChatMessage) {
   if (!message.quote) {
@@ -51,6 +55,57 @@ function MessageBubble({
           <img className="message-image" src={resolveMediaUrl(message.content)} alt="图片消息" />
         </button>
       );
+    }
+
+    if (message.messageType === "voice" && !message.revoked) {
+      let voiceData = { url: message.content, duration: 0 };
+      try {
+        const parsed = JSON.parse(message.content);
+        if (parsed.url) voiceData = { url: parsed.url, duration: parsed.duration || 0 };
+      } catch {
+        // plain URL
+      }
+      return (
+        <VoicePlayer
+          content={voiceData.url}
+          duration={voiceData.duration}
+          transcript={message.transcript}
+        />
+      );
+    }
+
+    if (message.messageType === "text" && !message.revoked) {
+      // Contact card: [名片] name\nID: userId\n微信: wechatId
+      const contactLines = message.content.split(/\r?\n/);
+      if (contactLines[0]?.startsWith("[名片]")) {
+        const name = contactLines[0].replace(/^\[名片]\s*/, "").trim();
+        const idLine = contactLines[1]?.match(/^ID:\s*(.+)$/);
+        const wechatLine = contactLines[2]?.match(/^微信:\s*(.+)$/);
+        if (idLine) {
+          const userId = idLine[1].trim();
+          const contact: ContactContent = {
+            name,
+            userId,
+            avatar: message.avatar || "",
+            wechatId: wechatLine ? wechatLine[1].trim() : userId,
+          };
+          return (
+            <div className="message-content message-contact">
+              <ContactCard contact={contact} isFriend={false} />
+            </div>
+          );
+        }
+      }
+
+      // Markdown: [MD]\n content
+      if (message.content.startsWith("[MD]\n")) {
+        const mdContent = message.content.slice(5);
+        return (
+          <div className="message-content message-markdown">
+            <MarkdownContent content={mdContent} />
+          </div>
+        );
+      }
     }
 
     if (message.messageType === "file" && !message.revoked) {

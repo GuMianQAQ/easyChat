@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { Solitaire } from "../../types/chat";
 import { createSolitaire } from "../../utils/chatApi";
 
@@ -97,7 +97,6 @@ export default function SolitaireCreateForm({
           onClick={handleSubmit}
           disabled={submitting}
         >
-          <Send size={14} />
           {submitting ? "创建中..." : "发起接龙"}
         </button>
       </div>
